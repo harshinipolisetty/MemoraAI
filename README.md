@@ -124,8 +124,8 @@ Please refer to [docs/implementation_plan.md](docs/implementation_plan.md) for d
 - [x] **Phase 1**: Architecture Foundation, System Specification & Scaffolding
 - [x] **Phase 2**: Configuration, Typed State Schemas & SQLite Persistence
 - [x] **Phase 3**: Local Vector Store & Hybrid Retrieval Engine
-- [ ] **Phase 4**: Agent Core, Temporal Resolution & Guardrails
-- [ ] **Phase 5**: LangGraph Multi-Agent Orchestration & Routing
+- [x] **Phase 4**: Agent Core, Temporal Resolution & Guardrails
+- [x] **Phase 5**: LangGraph Multi-Agent Orchestration & Routing
 - [ ] **Phase 6**: Streamlit UI & Interactive Memory Inspector
 - [ ] **Phase 7**: Evaluation Harness & Failure Analysis
 - [ ] **Phase 8**: Project Polish & Final AI Disclosure

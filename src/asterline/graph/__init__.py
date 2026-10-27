@@ -1,12 +1,13 @@
 """Graph package for Asterline Research Assistant."""
 
+from asterline.graph.routing import RoutingDecision, determine_route
 from asterline.graph.state import (
-    ResearchAssistantState,
     Citation,
+    ConversationMessage,
+    MemoryItem,
+    ResearchAssistantState,
     RetrievedChunk,
     VerificationResult,
-    MemoryItem,
-    ConversationMessage,
 )
 
 __all__ = [
@@ -16,4 +17,6 @@ __all__ = [
     "VerificationResult",
     "MemoryItem",
     "ConversationMessage",
+    "RoutingDecision",
+    "determine_route",
 ]

@@ -99,7 +99,7 @@ This document outlines the step-by-step phased roadmap for developing the Asterl
 
 ---
 
-## Phase 4: Agent Core, Temporal Resolution & Guardrails
+## Phase 4: Agent Core, Temporal Resolution & Guardrails *(Completed)*
 - **Scope**:
   - Input guardrails: character length limit, prompt injection sanitizer, API key scrubber.
   - Output guardrails: citation verifier against retrieved chunks, privacy auditor.
@@ -112,9 +112,11 @@ This document outlines the step-by-step phased roadmap for developing the Asterl
   - `src/asterline/guardrails/output.py`
   - `src/asterline/agents/documentation.py`
   - `src/asterline/agents/investigation.py`
+  - `src/asterline/agents/conflict_resolution.py`
   - `src/asterline/agents/memory_manager.py`
   - `src/asterline/agents/verification.py`
   - `tests/test_guardrails.py`
+  - `tests/test_agents.py`
   - `tests/test_verification.py`
 - **Dependencies**: Phase 3.
 - **Acceptance Criteria**:
@@ -122,11 +124,11 @@ This document outlines the step-by-step phased roadmap for developing the Asterl
   - Investigation agent correctly resolves known corpus supersessions (cold storage retention: 20d vs 60d; on-call stipend: $175 vs $140).
   - Memory manager ignores transient remarks and rejects secrets.
 - **Verification Tests**:
-  - `tests/test_guardrails.py`, `tests/test_verification.py`.
+  - `tests/test_guardrails.py`, `tests/test_agents.py`, `tests/test_verification.py`.
 
 ---
 
-## Phase 5: LangGraph Multi-Agent Orchestration & Routing
+## Phase 5: LangGraph Multi-Agent Orchestration & Routing *(Completed)*
 - **Scope**:
   - StateGraph setup connecting nodes with typed `ResearchAssistantState`.
   - Conditional router evaluating user intent and selecting minimal execution path.
