@@ -278,9 +278,19 @@ def test_workflow_retry_exhaustion_enforces_configured_maximum(shared_retriever:
     assert "Verification note" in result["final_response"]
 
 
-def test_workflow_explicit_fallback_metadata(workflow_app):
-    """Workflow state and output metadata explicitly reflect fallback status."""
-    app, service = workflow_app
+def test_workflow_explicit_fallback_metadata(shared_retriever: HybridRetriever, tmp_path: Path, monkeypatch):
+    """Workflow state and output metadata explicitly reflect fallback status in offline mode."""
+    monkeypatch.setenv("LLM_API_KEY", "")
+    from asterline.config.settings import Settings
+    no_key_settings = Settings(llm_api_key=None, langchain_api_key=None, _env_file=None)
+    monkeypatch.setattr("asterline.config.settings.get_settings", lambda: no_key_settings)
+    monkeypatch.setattr("asterline.agents.llm.get_settings", lambda: no_key_settings)
+    db_path = tmp_path / "workflow_fallback_test.db"
+    store = SQLiteStore(db_path)
+    service = MemoryService(store)
+    builder = WorkflowBuilder(retriever=shared_retriever, memory_service=service)
+    app = builder.build()
+
     initial_state = {
         "user_id": "user_alice",
         "conversation_id": "conv_meta",
@@ -294,4 +304,5 @@ def test_workflow_explicit_fallback_metadata(workflow_app):
     assert "llm_metadata" in result
     assert result["llm_metadata"]["is_fallback"] is True
     assert "fallback_reason" in result["llm_metadata"]
+
 

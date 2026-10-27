@@ -8,11 +8,14 @@ from asterline.config.settings import Settings
 def test_settings_default_values_load_without_api_key():
     """Settings can be loaded and imported without requiring an API key for storage tests."""
     settings = Settings(
+        _env_file=None,
         llm_api_key=None,
         langchain_api_key=None,
     )
     assert settings.llm_provider == "groq"
     assert settings.llm_model == "llama-3.3-70b-versatile"
+    assert settings.embedding_model_name == "BAAI/bge-small-en-v1.5"
+    assert settings.embedding_model == "BAAI/bge-small-en-v1.5"
     assert settings.sqlite_db_path == Path("data/memory.db")
     assert settings.corpus_path == Path("data/corpus.jsonl")
 

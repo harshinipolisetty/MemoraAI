@@ -1,0 +1,123 @@
+[
+  {
+    "id": "q1_sla",
+    "query": "What is the contractual monthly uptime commitment in the Enterprise Service Level Agreement?",
+    "elapsed_sec": 1.9,
+    "final_response": "The Enterprise Service Level Agreement includes a contractual monthly uptime commitment of **99.92 %**【sla:0】.",
+    "citations": [
+      {
+        "id": "sla:0",
+        "title": "Service and support terms"
+      }
+    ],
+    "route": "factual",
+    "verification_verdict": "pass",
+    "verification_reasoning": null,
+    "retry_count": 0,
+    "is_fallback": false,
+    "fallback_reason": null,
+    "exception": null
+  },
+  {
+    "id": "q2_retention",
+    "query": "What is the retention period for raw run records held in cold recovery storage?",
+    "elapsed_sec": 1.87,
+    "final_response": "The current policy (effective 2026‑01‑15) states that raw run records are kept in cold‑recovery storage **for 20 days after the plan‑specific searchable‑retention period ends**, after which they are permanently deleted【retention:0】.  \n\nA prior version of the security overview (published 2025‑03‑15) described a 60‑day cold‑recovery retention period【security:1】, but the newer retention policy supersedes that earlier 60‑day rule.",
+    "citations": [
+      {
+        "id": "retention:0",
+        "title": "Data retention policy"
+      },
+      {
+        "id": "security:1",
+        "title": "Security overview"
+      }
+    ],
+    "route": "factual",
+    "verification_verdict": "pass",
+    "verification_reasoning": null,
+    "retry_count": 0,
+    "is_fallback": false,
+    "fallback_reason": null,
+    "exception": null
+  },
+  {
+    "id": "q3_stipend",
+    "query": "What is the weekly on-call stipend?",
+    "elapsed_sec": 1.75,
+    "final_response": "The current weekly on‑call stipend is **$175 per week**. This amount took effect on 2026‑01‑01 and replaces the earlier $140 figure shown in older runbooks [handbook:1].",
+    "citations": [
+      {
+        "id": "handbook:1",
+        "title": "Employee handbook"
+      }
+    ],
+    "route": "factual",
+    "verification_verdict": "pass",
+    "verification_reasoning": null,
+    "retry_count": 0,
+    "is_fallback": false,
+    "fallback_reason": null,
+    "exception": null
+  },
+  {
+    "id": "q4_aql",
+    "query": "What is the AQL timeout in version 2.3?",
+    "elapsed_sec": 1.61,
+    "final_response": "The AQL query timeout in version 2.3 is **50 seconds**【release-23:0】【query:0】.",
+    "citations": [
+      {
+        "id": "release-23:0",
+        "title": "Version 2.3 release notes"
+      },
+      {
+        "id": "query:0",
+        "title": "AQL query reference"
+      }
+    ],
+    "route": "factual",
+    "verification_verdict": "pass",
+    "verification_reasoning": null,
+    "retry_count": 0,
+    "is_fallback": false,
+    "fallback_reason": null,
+    "exception": null
+  },
+  {
+    "id": "q5_export",
+    "query": "What idempotency key prevents duplicate warehouse export records?",
+    "elapsed_sec": 1.84,
+    "final_response": "The idempotency key used to prevent duplicate Warehouse Export records is the **pair (export_job_id, record_hash)** — the combination of the export job’s identifier and the hash of the record. This key replaced the earlier position‑based deduplication after patch 2.1.2 [export:1][release-21:2]",
+    "citations": [
+      {
+        "id": "export:1",
+        "title": "Warehouse Export specification"
+      },
+      {
+        "id": "release-21:2",
+        "title": "Version 2.1 release notes"
+      }
+    ],
+    "route": "factual",
+    "verification_verdict": "pass",
+    "verification_reasoning": null,
+    "retry_count": 0,
+    "is_fallback": false,
+    "fallback_reason": null,
+    "exception": null
+  },
+  {
+    "id": "q6_mars_abstain",
+    "query": "What quantum teleportation protocol is used for Mars rover telemetry?",
+    "elapsed_sec": 5.54,
+    "final_response": "I’m sorry, but the provided documentation does not contain any information about a quantum teleportation protocol for Mars rover telemetry. Consequently, I can’t answer that question based on the available evidence.",
+    "citations": [],
+    "route": "factual",
+    "verification_verdict": "revise",
+    "verification_reasoning": null,
+    "retry_count": 3,
+    "is_fallback": false,
+    "fallback_reason": null,
+    "exception": null
+  }
+]

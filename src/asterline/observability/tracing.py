@@ -136,7 +136,11 @@ def check_langsmith_status() -> Dict[str, Any]:
     has_settings_key = bool(
         settings.langchain_api_key and settings.langchain_api_key.get_secret_value().strip()
     )
-    is_tracing_on = os.environ.get("LANGCHAIN_TRACING_V2", "").lower() == "true" or settings.langchain_tracing_v2
+    env_tracing = os.environ.get("LANGCHAIN_TRACING_V2")
+    if env_tracing is not None:
+        is_tracing_on = env_tracing.strip().lower() in ("true", "1", "yes")
+    else:
+        is_tracing_on = settings.langchain_tracing_v2
 
     return {
         "tracing_enabled": bool(is_tracing_on and (has_env_key or has_settings_key)),

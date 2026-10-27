@@ -103,6 +103,11 @@ class Settings(BaseSettings):
         description="Maximum retries permitted for investigation agent upon verification failure",
     )
 
+    @property
+    def embedding_model(self) -> str:
+        """Alias for embedding_model_name ensuring backward compatibility."""
+        return self.embedding_model_name
+
     def resolve_path(self, relative_or_absolute: Path) -> Path:
         """Resolve a path relative to the project root if it is not absolute."""
         if relative_or_absolute.is_absolute():

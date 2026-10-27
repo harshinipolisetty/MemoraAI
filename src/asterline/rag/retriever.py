@@ -163,13 +163,15 @@ class HybridRetriever:
     def __init__(
         self,
         corpus_chunks: List[CorpusChunk],
-        chroma_persist_dir: Path,
+        chroma_persist_dir: Optional[Path] = None,
         embedding_model_name: str = "BAAI/bge-small-en-v1.5",
         collection_name: str = "asterline_docs",
+        chroma_persist_directory: Optional[Path] = None,
     ):
         self.corpus_chunks = corpus_chunks
         self.chunks_by_id: Dict[str, CorpusChunk] = {c.chunk_id: c for c in corpus_chunks}
-        self.chroma_dir = Path(chroma_persist_dir)
+        target_dir = chroma_persist_dir or chroma_persist_directory or Path("data/chroma")
+        self.chroma_dir = Path(target_dir)
         self.chroma_dir.mkdir(parents=True, exist_ok=True)
         self.collection_name = collection_name
 

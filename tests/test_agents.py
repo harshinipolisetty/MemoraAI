@@ -324,7 +324,9 @@ def test_memory_manager_user_isolation(memory_service: MemoryService):
 
 def test_llm_client_offline_fallback_metadata():
     """LLMClient in offline mode returns is_fallback=True and does not claim live model success."""
+    from asterline.config.settings import Settings
     client = LLMClient()
+    client.settings = Settings(llm_api_key=None, langchain_api_key=None, _env_file=None)
     res = client.generate_with_metadata("Test prompt")
     assert res.is_fallback is True
     assert res.fallback_reason is not None

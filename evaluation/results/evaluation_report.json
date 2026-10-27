@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-27T16:28:56.097622+05:30",
+  "timestamp": "2026-10-27T17:34:13.820792+05:30",
   "corpus_integrity": {
     "total_chunks": 75,
     "sha256": "F63FC05CF43204485C98BD8FB6D89860A32C16A7E906BC90975E7C3954FE9FB1"
@@ -33,8 +33,8 @@
     "grounded_response_rate": 1.0,
     "correct_abstention_rate": 1.0,
     "temporal_supersession_accuracy": 1.0,
-    "total_citations_evaluated": 62,
-    "valid_citations_count": 62
+    "total_citations_evaluated": 36,
+    "valid_citations_count": 36
   },
   "routing_benchmark": {
     "total_queries": 20,

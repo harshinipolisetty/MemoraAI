@@ -65,8 +65,8 @@ def get_runtime() -> Dict[str, Any]:
     chroma_dir = settings.resolve_path(settings.chroma_persist_directory)
     retriever = HybridRetriever(
         corpus_chunks=chunks,
-        chroma_persist_directory=chroma_dir,
-        embedding_model_name=settings.embedding_model,
+        chroma_persist_dir=chroma_dir,
+        embedding_model_name=settings.embedding_model_name,
     )
 
     # 3. Persistent SQLite Memory Store & Application Service

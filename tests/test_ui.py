@@ -164,3 +164,22 @@ def test_cross_user_memory_isolation(tmp_path):
     assert charlie_del is False
     # Alice memory remains active
     assert service.is_memory_active(alice, item.memory_id) is True
+
+
+def test_ui_runtime_initialization_regression():
+    """Regression test: verify get_runtime initializes successfully with settings.embedding_model_name."""
+    from app.main import get_runtime
+    from asterline.config.settings import get_settings
+
+    settings = get_settings()
+    assert hasattr(settings, "embedding_model_name")
+    assert hasattr(settings, "embedding_model")
+    assert settings.embedding_model == settings.embedding_model_name
+
+    runtime = get_runtime.__wrapped__()
+    assert runtime is not None
+    assert "retriever" in runtime
+    assert "workflow" in runtime
+    assert "store" in runtime
+    assert "memory_service" in runtime
+
