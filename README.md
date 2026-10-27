@@ -123,7 +123,7 @@ The project includes an automated evaluation harness under `evaluation/`:
 Please refer to [docs/implementation_plan.md](docs/implementation_plan.md) for detailed progress through the 8 project phases.
 - [x] **Phase 1**: Architecture Foundation, System Specification & Scaffolding
 - [x] **Phase 2**: Configuration, Typed State Schemas & SQLite Persistence
-- [ ] **Phase 3**: Local Vector Store & Hybrid Retrieval Engine
+- [x] **Phase 3**: Local Vector Store & Hybrid Retrieval Engine
 - [ ] **Phase 4**: Agent Core, Temporal Resolution & Guardrails
 - [ ] **Phase 5**: LangGraph Multi-Agent Orchestration & Routing
 - [ ] **Phase 6**: Streamlit UI & Interactive Memory Inspector

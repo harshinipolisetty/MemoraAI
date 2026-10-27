@@ -78,7 +78,7 @@ This document outlines the step-by-step phased roadmap for developing the Asterl
 
 ---
 
-## Phase 3: Local Vector Indexing & Hybrid Retrieval Engine
+## Phase 3: Local Vector Indexing & Hybrid Retrieval Engine *(Completed)*
 - **Scope**:
   - Corpus ingestion pipeline parsing `data/corpus.jsonl` without data loss.
   - Local embedding integration using FastEmbed (`BAAI/bge-small-en-v1.5`).
