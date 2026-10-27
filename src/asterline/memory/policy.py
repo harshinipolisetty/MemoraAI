@@ -46,7 +46,7 @@ TRANSIENT_PHRASES: Set[str] = {
 
 # Regex to detect claims asserting universal product truth rather than user context
 PRODUCT_WIDE_ASSERTIONS = re.compile(
-    r"\b(?:asterline\s+(?:supports|costs|retains|allows|includes)|(?:launch|team|enterprise)\s+(?:costs|includes|allows))\b",
+    r"\b(?:asterline(?:\s+labs)?(?:\s+(?:product|team|launch|enterprise))?\s+(?:supports|costs|retains|allows|includes)|(?:launch|team|enterprise)(?:\s+plan)?\s+(?:costs|includes|allows))\b",
     re.IGNORECASE,
 )
 

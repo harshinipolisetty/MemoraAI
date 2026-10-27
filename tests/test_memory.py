@@ -319,3 +319,71 @@ def test_repeated_init_schema_does_not_destroy_records(temp_db: Path):
     assert conv_check["title"] == "Persisted Conversation"
     assert mem_check is not None
     assert mem_check.content == "Persistent user preference across re-inits"
+
+
+def test_forgotten_memory_purged_completely_from_raw_sqlite(temp_db: Path):
+    """Regression Test: Forgetting a memory permanently deletes the row from user_memories table.
+    
+    Proves content cannot be retrieved even via raw SQL inspection, and audit log contains
+    only non-sensitive metadata (no raw content leakage).
+    """
+    store = SQLiteStore(temp_db)
+    service = MemoryService(store)
+
+    target_content = "Alice private confidential project codename Nebula"
+    mem, decision = service.create_memory("user_alice", target_content, "workspace_context")
+    assert mem is not None
+    assert decision.allowed is True
+
+    # Verify present in raw SQLite
+    with store.get_connection() as conn:
+        row = conn.execute("SELECT * FROM user_memories WHERE memory_id = ?", (mem.memory_id,)).fetchone()
+        assert row is not None
+        assert row["content"] == target_content
+
+    # Execute forget
+    deleted = service.delete_memory("user_alice", mem.memory_id, reason="User requested forget")
+    assert deleted is True
+
+    # Verify completely purged from raw SQLite table
+    with store.get_connection() as conn:
+        # Row must not exist at all (no soft delete row left behind)
+        row = conn.execute("SELECT * FROM user_memories WHERE memory_id = ?", (mem.memory_id,)).fetchone()
+        assert row is None
+
+        # Content must not exist anywhere in user_memories table
+        all_rows = conn.execute("SELECT * FROM user_memories WHERE content LIKE '%Nebula%'").fetchall()
+        assert len(all_rows) == 0
+
+        # Audit log must contain action DELETE with only non-sensitive summary
+        audit_rows = conn.execute(
+            "SELECT * FROM memory_audit_log WHERE memory_id = ? AND action = 'DELETE'",
+            (mem.memory_id,),
+        ).fetchall()
+        assert len(audit_rows) == 1
+        audit_entry = dict(audit_rows[0])
+        assert "Nebula" not in audit_entry["previous_summary"]
+        assert "Category: workspace_context" in audit_entry["previous_summary"]
+        assert f"Length: {len(target_content)}" in audit_entry["previous_summary"]
+
+
+def test_cross_user_cannot_access_or_purge_another_user_memory(temp_db: Path):
+    """Regression Test: User Bob cannot access, update, or purge User Alice's memory."""
+    store = SQLiteStore(temp_db)
+    service = MemoryService(store)
+
+    alice_mem, _ = service.create_memory("user_alice", "Alice critical production workspace context", "workspace_context")
+    assert alice_mem is not None
+
+    # Bob tries to read Alice's memory
+    assert service.get_user_memory("user_bob", alice_mem.memory_id) is None
+
+    # Bob tries to delete Alice's memory
+    bob_delete_success = service.delete_memory("user_bob", alice_mem.memory_id)
+    assert bob_delete_success is False
+
+    # Alice's memory must remain untouched in store
+    alice_check = service.get_user_memory("user_alice", alice_mem.memory_id)
+    assert alice_check is not None
+    assert alice_check.content == "Alice critical production workspace context"
+

@@ -316,3 +316,94 @@ def test_memory_manager_user_isolation(memory_service: MemoryService):
 
     assert "Bob" in bob_view["response"]
     assert "Alice" not in bob_view["response"]
+
+
+# -----------------------------------------------------------------------------
+# 5. Provider Failures, Timeouts, and Explicit Fallback Metadata
+# -----------------------------------------------------------------------------
+
+def test_llm_client_offline_fallback_metadata():
+    """LLMClient in offline mode returns is_fallback=True and does not claim live model success."""
+    client = LLMClient()
+    res = client.generate_with_metadata("Test prompt")
+    assert res.is_fallback is True
+    assert res.fallback_reason is not None
+    assert "offline" in res.fallback_reason.lower()
+    assert res.content != ""
+
+
+def test_llm_client_handles_provider_exception_with_explicit_fallback(monkeypatch):
+    """When a live LLM provider fails (e.g. timeout or connection failure), LLMClient
+    catches the exception, marks is_fallback=True, captures error metadata, and never
+    reports it as a successful live-model response.
+    """
+    settings = get_settings()
+    # Simulate a configured provider and API key
+    monkeypatch.setattr(settings, "llm_api_key", type("Secret", (), {"get_secret_value": lambda self: "fake-key"})())
+    monkeypatch.setattr(settings, "llm_provider", "groq")
+
+    client = LLMClient()
+
+    # Simulate provider raising a connection timeout
+    def mock_invoke_failing(*args, **kwargs):
+        raise TimeoutError("Connection to Groq API timed out after 30.0s")
+
+    # Monkeypatch the provider instantiation or invocation
+    import langchain_groq
+    class MockChatGroq:
+        def __init__(self, *args, **kwargs):
+            pass
+        def invoke(self, *args, **kwargs):
+            mock_invoke_failing()
+
+    monkeypatch.setattr(langchain_groq, "ChatGroq", MockChatGroq)
+
+    res = client.generate_with_metadata("Test prompt under provider failure")
+    assert res.is_fallback is True
+    assert res.error is not None
+    assert "timed out" in res.error
+    assert res.fallback_reason == "provider_exception"
+    assert "Fallback Mode" in res.content
+
+
+def test_documentation_agent_preserves_existing_chunks(shared_retriever: HybridRetriever):
+    """Documentation Agent reuses existing_chunks when provided instead of re-searching."""
+    agent = DocumentationAgent(retriever=shared_retriever)
+    custom_chunk = RetrievedChunk(
+        chunk_id="pricing:0",
+        doc_id="pricing",
+        title="Plans and billing",
+        category="pricing",
+        owner="Asterline Documentation",
+        source_url="",
+        published="20260310",
+        version="3",
+        text="Launch costs $59 per month custom preserved test evidence.",
+    )
+    result = agent.research("Cost of Launch plan?", existing_chunks=[custom_chunk])
+    assert len(result["retrieved_chunks"]) == 1
+    assert result["retrieved_chunks"][0].text == "Launch costs $59 per month custom preserved test evidence."
+    assert "is_fallback" in result
+    assert "llm_metadata" in result
+
+
+def test_investigation_agent_preserves_existing_chunks(shared_retriever: HybridRetriever):
+    """Investigation Agent reuses existing_chunks when provided instead of re-searching."""
+    agent = InvestigationAgent(retriever=shared_retriever)
+    custom_chunk = RetrievedChunk(
+        chunk_id="retention:0",
+        doc_id="retention",
+        title="Data retention policy",
+        category="policy",
+        owner="Asterline Documentation",
+        source_url="",
+        published="20260115",
+        version="2",
+        text="Effective 2026-01-15, raw run records are held in cold recovery storage for 20 days.",
+    )
+    result = agent.investigate("Retention conflict?", existing_chunks=[custom_chunk])
+    assert len(result["retrieved_chunks"]) == 1
+    assert result["retrieved_chunks"][0].chunk_id == "retention:0"
+    assert "is_fallback" in result
+    assert "llm_metadata" in result
+

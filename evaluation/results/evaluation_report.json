@@ -1,0 +1,57 @@
+{
+  "timestamp": "2026-10-27T16:28:56.097622+05:30",
+  "corpus_integrity": {
+    "total_chunks": 75,
+    "sha256": "F63FC05CF43204485C98BD8FB6D89860A32C16A7E906BC90975E7C3954FE9FB1"
+  },
+  "retrieval_benchmark": {
+    "num_cases": 16,
+    "top_k": 5,
+    "modes": {
+      "dense": {
+        "hit_rate": 1.0,
+        "recall": 0.9792,
+        "mrr": 0.9062
+      },
+      "keyword": {
+        "hit_rate": 1.0,
+        "recall": 1.0,
+        "mrr": 0.8854
+      },
+      "hybrid": {
+        "hit_rate": 1.0,
+        "recall": 1.0,
+        "mrr": 0.8438
+      }
+    }
+  },
+  "grounding_and_citation_benchmark": {
+    "total_queries": 20,
+    "standard_queries": 16,
+    "abstention_queries": 4,
+    "citation_validity_rate": 1.0,
+    "grounded_response_rate": 1.0,
+    "correct_abstention_rate": 1.0,
+    "temporal_supersession_accuracy": 1.0,
+    "total_citations_evaluated": 62,
+    "valid_citations_count": 62
+  },
+  "routing_benchmark": {
+    "total_queries": 20,
+    "correct_routing_rate": 1.0,
+    "per_route_accuracy": {
+      "conversational": 1.0,
+      "clarification": 1.0,
+      "memory_ops": 1.0,
+      "factual": 1.0,
+      "investigation": 1.0
+    }
+  },
+  "memory_benchmark": {
+    "total_scenarios": 10,
+    "memory_operation_success_rate": 1.0,
+    "cross_user_isolation_violations": 0,
+    "forget_purge_rate": 1.0,
+    "policy_rejection_accuracy": 1.0
+  }
+}

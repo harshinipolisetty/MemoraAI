@@ -26,7 +26,8 @@ class RoutingDecision:
 # Conversational greeting keywords
 GREETING_PATTERNS = [
     re.compile(r"^\s*(?:hi|hello|hey|good\s+morning|good\s+evening|howdy|greetings)\b", re.IGNORECASE),
-    re.compile(r"^\s*(?:who\s+are\s+you|what\s+can\s+you\s+do|what\s+is\s+your\s+name|help)\s*\??$", re.IGNORECASE),
+    re.compile(r"\b(?:who\s+are\s+you|what\s+can\s+you\s+do|what\s+is\s+your\s+name|how\s+can\s+you\s+help)\b", re.IGNORECASE),
+    re.compile(r"^\s*help\s*\??$", re.IGNORECASE),
 ]
 
 # Explicit memory command patterns
@@ -40,8 +41,8 @@ MEMORY_COMMAND_PATTERNS = [
 INVESTIGATION_PATTERNS = [
     re.compile(r"\binc-\d{4}-\d{2}\b", re.IGNORECASE),  # e.g. INC-2025-12, INC-2025-08
     re.compile(r"\b(?:incident|outage|root\s+cause|post-mortem|postmortem|downtime)\b", re.IGNORECASE),
-    re.compile(r"\b(?:supersede|superseded|supersedes|conflict|discrepancy|differs|differ)\b", re.IGNORECASE),
-    re.compile(r"\b(?:compare|comparison|timeline|historical|history|versus|vs\.?)\b", re.IGNORECASE),
+    re.compile(r"\b(?:supersede|superseded|supersedes|conflict|discrepancy|differs|differ|difference|differences)\b", re.IGNORECASE),
+    re.compile(r"\b(?:compare|comparison|timeline|historical|history|versus|vs\.?|evolution)\b", re.IGNORECASE),
     re.compile(r"\b(?:why\s+did|what\s+caused|how\s+was\s+it\s+resolved|patch\s+\d+\.\d+)\b", re.IGNORECASE),
 ]
 

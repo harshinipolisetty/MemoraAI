@@ -148,6 +148,19 @@ class SQLiteStore:
             ).fetchall()
             return [dict(r) for r in rows]
 
+    def update_conversation_title(self, conversation_id: str, user_id: str, title: str) -> bool:
+        """Update the title of an existing conversation owned by user_id."""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE conversations 
+                SET title = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE conversation_id = ? AND user_id = ?
+                """,
+                (title, conversation_id, user_id),
+            )
+            return cursor.rowcount > 0
+
     # -------------------------------------------------------------------------
     # Message Operations (Scoped by user_id)
     # -------------------------------------------------------------------------
@@ -300,12 +313,12 @@ class SQLiteStore:
         audit_id: str,
         reason: Optional[str] = None,
     ) -> bool:
-        """Deactivate a memory owned by user_id and record audit event in one transaction."""
+        """Permanently remove memory owned by user_id from persistent storage and record audit event in one transaction."""
         with self.transaction() as conn:
             existing = conn.execute(
                 """
                 SELECT * FROM user_memories 
-                WHERE memory_id = ? AND user_id = ? AND is_active = 1
+                WHERE memory_id = ? AND user_id = ?
                 """,
                 (memory_id, user_id),
             ).fetchone()
@@ -316,8 +329,7 @@ class SQLiteStore:
 
             conn.execute(
                 """
-                UPDATE user_memories 
-                SET is_active = 0, updated_at = CURRENT_TIMESTAMP 
+                DELETE FROM user_memories 
                 WHERE memory_id = ? AND user_id = ?
                 """,
                 (memory_id, user_id),

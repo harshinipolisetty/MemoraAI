@@ -5,10 +5,19 @@ Computes Hit Rate@k, Recall@k, and Mean Reciprocal Rank (MRR) on evaluation/data
 
 import json
 from pathlib import Path
+import sys
 from typing import Any, Dict, List
+
+# Ensure src is on Python path for standalone script execution
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+SRC_DIR = PROJECT_ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
 from asterline.config.settings import get_settings
 from asterline.rag.ingestion import load_and_validate_corpus
 from asterline.rag.retriever import HybridRetriever
+
 
 
 def evaluate_retrieval(top_k: int = 5) -> Dict[str, Any]:

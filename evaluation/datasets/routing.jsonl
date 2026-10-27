@@ -1,0 +1,20 @@
+{"id": "route_01", "query": "Hello there!", "expected_route": "conversational", "rationale": "Direct greeting phrase."}
+{"id": "route_02", "query": "Good morning assistant", "expected_route": "conversational", "rationale": "Direct time-of-day greeting."}
+{"id": "route_03", "query": "Who are you and what can you help me with?", "expected_route": "conversational", "rationale": "Bot identity query."}
+{"id": "route_04", "query": "?", "expected_route": "clarification", "rationale": "Single punctuation character is underspecified."}
+{"id": "route_05", "query": "help me", "expected_route": "clarification", "rationale": "Ambiguous two-word assistance cry without topic."}
+{"id": "route_06", "query": "Please remember that our team uses Snowflake for data warehousing.", "expected_route": "memory_ops", "rationale": "Explicit remember command."}
+{"id": "route_07", "query": "Remember: our workspace is deployed in AWS us-east-1 region.", "expected_route": "memory_ops", "rationale": "Remember prefix with workspace preference."}
+{"id": "route_08", "query": "What do you remember about my profile?", "expected_route": "memory_ops", "rationale": "Memory retrieval command."}
+{"id": "route_09", "query": "List my memories and active preferences.", "expected_route": "memory_ops", "rationale": "Memory list command."}
+{"id": "route_10", "query": "Please forget my warehouse preference.", "expected_route": "memory_ops", "rationale": "Explicit deletion / forget command."}
+{"id": "route_11", "query": "Delete memory regarding my team role.", "expected_route": "memory_ops", "rationale": "Delete memory command."}
+{"id": "route_12", "query": "What is the monthly subscription price of the Team plan?", "expected_route": "factual", "rationale": "Single topic pricing inquiry."}
+{"id": "route_13", "query": "What is the maximum payload limit for POST /v2/runs?", "expected_route": "factual", "rationale": "Direct API limit specification inquiry."}
+{"id": "route_14", "query": "How many alert rules can be configured on the Launch tier?", "expected_route": "factual", "rationale": "Plan quota inquiry."}
+{"id": "route_15", "query": "What is the SLA uptime commitment percentage for Enterprise customers?", "expected_route": "factual", "rationale": "SLA policy lookup."}
+{"id": "route_16", "query": "What caused duplicate warehouse export rows in incident INC-2025-12?", "expected_route": "investigation", "rationale": "Incident identifier and root-cause inquiry."}
+{"id": "route_17", "query": "Explain the root cause of the ingestion outage in INC-2025-08 and its patch fix.", "expected_route": "investigation", "rationale": "Incident post-mortem synthesis."}
+{"id": "route_18", "query": "Compare the cold storage retention policy supersession versus older documentation.", "expected_route": "investigation", "rationale": "Temporal supersession and policy comparison."}
+{"id": "route_19", "query": "Why did Signals alert evaluations fail during the system downtime?", "expected_route": "investigation", "rationale": "Outage and cross-component failure analysis."}
+{"id": "route_20", "query": "Explain the version evolution and differences between 2.0 and 2.3 query timeouts.", "expected_route": "investigation", "rationale": "Multi-version historical comparison."}

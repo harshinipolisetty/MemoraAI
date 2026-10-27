@@ -44,6 +44,14 @@ class MemoryService:
         conv_title = title or "New Investigation"
         return self.store.create_conversation(conv_id, user_id, conv_title)
 
+    def list_user_conversations(self, user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """List conversation threads owned by user_id."""
+        return self.store.list_conversations(user_id, limit=limit)
+
+    def update_conversation_title(self, conversation_id: str, user_id: str, title: str) -> bool:
+        """Update the title of a conversation thread owned by user_id."""
+        return self.store.update_conversation_title(conversation_id, user_id, title)
+
     def append_message(
         self,
         conversation_id: str,

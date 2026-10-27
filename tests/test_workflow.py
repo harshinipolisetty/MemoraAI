@@ -159,7 +159,6 @@ def test_workflow_factual_research_execution(workflow_app):
 def test_workflow_bounded_retry_prevention(workflow_app):
     """Workflow halts retry loops at configured MAX_RETRIES without crashing."""
     app, service = workflow_app
-    # Set state with fabricated citation and retry_count at maximum
     initial_state = {
         "user_id": "user_alice",
         "conversation_id": "conv_retry",
@@ -167,6 +166,132 @@ def test_workflow_bounded_retry_prevention(workflow_app):
         "retry_count": 2,
     }
     result = app.invoke(initial_state)
-    # Graph halts cleanly and delivers response
     assert result["retry_count"] <= 2
     assert result["final_response"] != ""
+
+
+def test_workflow_documentation_agent_revision_routing(shared_retriever: HybridRetriever, tmp_path: Path):
+    """Documentation Agent revisions return to Documentation Agent, preserving route and evidence."""
+    db_path = tmp_path / "doc_retry_test.db"
+    store = SQLiteStore(db_path)
+    service = MemoryService(store)
+
+    attempts = {"count": 0}
+
+    def mock_synthesizer(sys_prompt: str, user_prompt: str) -> str:
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            # First attempt: deliberate fabricated citation to trigger revise
+            return "Launch costs $59 [pricing:999]."
+        # Second attempt: corrected citation matching evidence
+        return "Launch costs $59 [pricing:0]."
+
+    from asterline.agents.llm import LLMClient
+    mock_llm = LLMClient(mock_synthesizer=mock_synthesizer)
+    builder = WorkflowBuilder(retriever=shared_retriever, memory_service=service, llm_client=mock_llm)
+    app = builder.build()
+
+    initial_state = {
+        "user_id": "user_alice",
+        "conversation_id": "conv_doc_retry",
+        "user_message": "What is the cost of the Launch plan?",
+    }
+    result = app.invoke(initial_state)
+
+    # Verifies retry occurred
+    assert attempts["count"] == 2
+    assert result["retry_count"] == 1
+    assert result["route"] == "factual"
+    assert result["verification"]["verdict"] == "pass"
+    assert any(c["chunk_id"] == "pricing:0" for c in result["citations"])
+    assert len(result["retrieved_chunks"]) > 0
+
+
+def test_workflow_investigation_agent_revision_routing(shared_retriever: HybridRetriever, tmp_path: Path):
+    """Investigation Agent revisions return to Investigation Agent, preserving route and evidence."""
+    db_path = tmp_path / "invest_retry_test.db"
+    store = SQLiteStore(db_path)
+    service = MemoryService(store)
+
+    attempts = {"count": 0}
+
+    def mock_synthesizer(sys_prompt: str, user_prompt: str) -> str:
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            # First attempt: fabricated chunk to trigger revise
+            return "INC-2025-12 was caused by Heron query engine [incident:999]."
+        # Second attempt: correct citations
+        return "INC-2025-12 deduplication bug was patched in [incident-12:1] [release-21:2]."
+
+    from asterline.agents.llm import LLMClient
+    mock_llm = LLMClient(mock_synthesizer=mock_synthesizer)
+    builder = WorkflowBuilder(retriever=shared_retriever, memory_service=service, llm_client=mock_llm)
+    app = builder.build()
+
+    initial_state = {
+        "user_id": "user_alice",
+        "conversation_id": "conv_invest_retry",
+        "user_message": "What caused the duplicate export rows in incident INC-2025-12?",
+    }
+    result = app.invoke(initial_state)
+
+    # Verifies retry occurred and returned to Investigation Agent
+    assert attempts["count"] == 2
+    assert result["retry_count"] == 1
+    assert result["route"] == "investigation"
+    assert result["verification"]["verdict"] == "pass"
+    assert len(result["retrieved_chunks"]) > 0
+
+
+def test_workflow_retry_exhaustion_enforces_configured_maximum(shared_retriever: HybridRetriever, tmp_path: Path):
+    """Enforces configured maximum of two retries. If agent keeps failing verification,
+    the workflow stops after exactly 2 retries (total 3 attempts) and routes to output_guardrails_node.
+    """
+    db_path = tmp_path / "exhaust_retry_test.db"
+    store = SQLiteStore(db_path)
+    service = MemoryService(store)
+
+    attempts = {"count": 0}
+
+    def failing_synthesizer(sys_prompt: str, user_prompt: str) -> str:
+        attempts["count"] += 1
+        # Always return fabricated citation so verification always emits 'revise'
+        return f"Attempt {attempts['count']} with fabricated citation [pricing:999]."
+
+    from asterline.agents.llm import LLMClient
+    mock_llm = LLMClient(mock_synthesizer=failing_synthesizer)
+    builder = WorkflowBuilder(retriever=shared_retriever, memory_service=service, llm_client=mock_llm)
+    app = builder.build()
+
+    initial_state = {
+        "user_id": "user_alice",
+        "conversation_id": "conv_exhaust",
+        "user_message": "What is the monthly price of Launch plan?",
+    }
+    result = app.invoke(initial_state)
+
+    # Initial attempt (count=1, retry_count=1) -> Retry 1 (count=2, retry_count=2) -> Retry 2 (count=3, retry_count=3)
+    # Total attempts = 3, exactly 2 retries executed before exhaustion halts at output_guardrails_node
+    assert attempts["count"] == 3
+    assert result["retry_count"] == 3
+    assert result["route"] == "factual"
+    assert "Verification note" in result["final_response"]
+
+
+def test_workflow_explicit_fallback_metadata(workflow_app):
+    """Workflow state and output metadata explicitly reflect fallback status."""
+    app, service = workflow_app
+    initial_state = {
+        "user_id": "user_alice",
+        "conversation_id": "conv_meta",
+        "user_message": "What is the price of Launch plan?",
+    }
+    result = app.invoke(initial_state)
+
+    # In offline mode without live API key, is_fallback must be True and metadata present
+    assert "is_fallback" in result
+    assert result["is_fallback"] is True
+    assert "llm_metadata" in result
+    assert result["llm_metadata"]["is_fallback"] is True
+    assert "fallback_reason" in result["llm_metadata"]
+

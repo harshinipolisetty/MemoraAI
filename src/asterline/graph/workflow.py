@@ -93,6 +93,8 @@ class WorkflowBuilder:
             "final_response": greeting_text,
             "citations": [],
             "retrieved_chunks": [],
+            "is_fallback": False,
+            "llm_metadata": {"route": "conversational"},
         }
 
     def clarification_node(self, state: ResearchAssistantState) -> Dict[str, Any]:
@@ -106,6 +108,8 @@ class WorkflowBuilder:
             "final_response": msg,
             "citations": [],
             "retrieved_chunks": [],
+            "is_fallback": False,
+            "llm_metadata": {"route": "clarification"},
         }
 
     def memory_manager_node(self, state: ResearchAssistantState) -> Dict[str, Any]:
@@ -120,44 +124,62 @@ class WorkflowBuilder:
             "memory_operations_executed": [result["operation"]],
             "citations": [],
             "retrieved_chunks": [],
+            "is_fallback": False,
+            "llm_metadata": {"route": "memory_ops", "operation": result["operation"]},
         }
 
     def documentation_agent_node(self, state: ResearchAssistantState) -> Dict[str, Any]:
-        """Execute documentation research."""
+        """Execute documentation research preserving evidence context and original route."""
         feedback = None
         if state.get("verification") and state["verification"].get("feedback"):
             feedback = state["verification"]["feedback"]
+
+        existing_chunks = None
+        if state.get("retrieved_chunks"):
+            existing_chunks = [RetrievedChunk(**c) for c in state["retrieved_chunks"]]
 
         res = self.doc_agent.research(
             query=state["user_message"],
             user_memories=state.get("active_user_memories"),
             feedback=feedback,
+            existing_chunks=existing_chunks,
         )
         return {
             "draft_response": res["draft_response"],
             "citations": [c.model_dump() for c in res["citations"]],
             "retrieved_chunks": [c.model_dump() for c in res["retrieved_chunks"]],
+            "route": state.get("route", "factual"),
+            "is_fallback": res.get("is_fallback", False),
+            "llm_metadata": res.get("llm_metadata", {}),
         }
 
     def investigation_agent_node(self, state: ResearchAssistantState) -> Dict[str, Any]:
-        """Execute multi-document investigation."""
+        """Execute multi-document investigation preserving evidence context and original route."""
         feedback = None
         if state.get("verification") and state["verification"].get("feedback"):
             feedback = state["verification"]["feedback"]
+
+        existing_chunks = None
+        if state.get("retrieved_chunks"):
+            existing_chunks = [RetrievedChunk(**c) for c in state["retrieved_chunks"]]
 
         res = self.invest_agent.investigate(
             query=state["user_message"],
             user_memories=state.get("active_user_memories"),
             feedback=feedback,
+            existing_chunks=existing_chunks,
         )
         return {
             "draft_response": res["draft_response"],
             "citations": [c.model_dump() for c in res["citations"]],
             "retrieved_chunks": [c.model_dump() for c in res["retrieved_chunks"]],
+            "route": state.get("route", "investigation"),
+            "is_fallback": res.get("is_fallback", False),
+            "llm_metadata": res.get("llm_metadata", {}),
         }
 
     def verification_node(self, state: ResearchAssistantState) -> Dict[str, Any]:
-        """Audit draft response and citations against evidence."""
+        """Audit draft response and citations against evidence and increment retry count on revision."""
         cits = [Citation(**c) for c in state.get("citations", [])]
         chunks = [RetrievedChunk(**c) for c in state.get("retrieved_chunks", [])]
 
@@ -168,13 +190,22 @@ class WorkflowBuilder:
             user_id=state["user_id"],
             is_investigation=(state.get("route") == "investigation"),
         )
-        return {"verification": verdict_obj.model_dump()}
+        retry_count = state.get("retry_count", 0)
+        new_retry_count = retry_count + 1 if verdict_obj.verdict == "revise" else retry_count
+        return {
+            "verification": verdict_obj.model_dump(),
+            "retry_count": new_retry_count,
+        }
 
     def output_guardrails_node(self, state: ResearchAssistantState) -> Dict[str, Any]:
         """Apply output sanitization, citation checks, and final response formatting."""
         # If already errored or direct conversational/memory response
         if state.get("error"):
-            return {"final_response": state.get("final_response", state["error"])}
+            return {
+                "final_response": state.get("final_response", state["error"]),
+                "is_fallback": state.get("is_fallback", False),
+                "llm_metadata": state.get("llm_metadata", {}),
+            }
 
         draft = state.get("draft_response", "")
         cits = [Citation(**c) for c in state.get("citations", [])]
@@ -195,11 +226,15 @@ class WorkflowBuilder:
             return {
                 "final_response": final_ans,
                 "citations": [],
+                "is_fallback": state.get("is_fallback", False),
+                "llm_metadata": state.get("llm_metadata", {}),
             }
 
         return {
             "final_response": guard_res.validated_response,
             "citations": [c.model_dump() for c in guard_res.validated_citations],
+            "is_fallback": state.get("is_fallback", False),
+            "llm_metadata": state.get("llm_metadata", {}),
         }
 
     def persistence_node(self, state: ResearchAssistantState) -> Dict[str, Any]:
@@ -279,9 +314,7 @@ class WorkflowBuilder:
         retry_count = state.get("retry_count", 0)
         max_retries = self.settings.max_investigation_retries
 
-        if verdict == "revise" and retry_count < max_retries:
-            # Increment retry count in state and loop back to the agent
-            state["retry_count"] = retry_count + 1
+        if verdict == "revise" and retry_count <= max_retries:
             if state.get("route") == "investigation":
                 return "investigation_agent_node"
             return "documentation_agent_node"

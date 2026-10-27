@@ -128,68 +128,70 @@ This document outlines the step-by-step phased roadmap for developing the Asterl
 
 ---
 
-## Phase 5: LangGraph Multi-Agent Orchestration & Routing *(Completed)*
+## Phase 5: Evaluation, LangSmith Observability & System Hardening *(Completed)*
 - **Scope**:
-  - StateGraph setup connecting nodes with typed `ResearchAssistantState`.
-  - Conditional router evaluating user intent and selecting minimal execution path.
-  - Bounded retry loop (max 2 retries) between Verifier and Research agents.
-  - Observability integration attaching metadata, node timings, and tags to LangSmith traces.
-- **Files Expected**:
-  - `src/asterline/graph/routing.py`
-  - `src/asterline/graph/workflow.py`
+  - Offline reproducible evaluation harness (`evaluation/evaluators.py`, `evaluation/run_evals.py`).
+  - Comprehensive evaluation datasets:
+    - `evaluation/datasets/research.jsonl`: 20 research cases (grounding, pricing, SLAs, incidents, temporal supersession, and abstention).
+    - `evaluation/datasets/routing.jsonl`: 20 intent routing cases across 5 operational paths.
+    - `evaluation/datasets/memory.jsonl`: 10 multi-turn scenarios covering persistence, Alice/Bob/Charlie isolation, forget purges, and policy rejections.
+  - Metrics evaluation: Hit Rate@k, Recall@k, MRR, Citation Validity (100%), Grounded Response (100%), Abstention (100%), Routing (100%), Memory Isolation (100%).
+  - LangSmith Observability & Redaction (`src/asterline/observability/tracing.py`):
+    - Recursive PII, token, and API key scrubbing before trace dispatch.
+    - Sanitized trace metadata omitting raw memory contents.
+    - Graceful non-blocking fallback when credentials are absent or tracing is disabled.
+  - Hardening fixes:
+    - Bounded retry routing returning to original researcher.
+    - True cryptographic/physical deletion (`DELETE FROM user_memories`) upon forget operations.
+    - Explicit fallback reporting with structured metadata.
+  - Documentation: `docs/evaluation.md`, `docs/failure_analysis.md`, `evaluation/results/evaluation_report.json`.
+- **Files Created / Updated**:
+  - `evaluation/evaluators.py`
+  - `evaluation/run_evals.py`
+  - `evaluation/datasets/research.jsonl`
+  - `evaluation/datasets/routing.jsonl`
+  - `evaluation/datasets/memory.jsonl`
   - `src/asterline/observability/tracing.py`
-  - `tests/test_routing.py`
-  - `tests/test_workflow.py`
+  - `tests/test_evaluation.py`
+  - `tests/test_tracing.py`
+  - `docs/evaluation.md`
+  - `docs/failure_analysis.md`
 - **Dependencies**: Phase 4.
 - **Acceptance Criteria**:
-  - Direct greetings bypass the RAG pipeline.
-  - Factual questions route to Documentation Agent; incident/conflict questions route to Investigation Agent.
-  - LangSmith traces clearly show agent collaboration sequence.
+  - Zero paid API calls required for offline evaluations.
+  - Corpus integrity preserved (SHA256: `F63FC05CF43204485C98BD8FB6D89860A32C16A7E906BC90975E7C3954FE9FB1`).
+  - All 110 automated tests passing.
 - **Verification Tests**:
-  - `tests/test_routing.py`, `tests/test_workflow.py`.
+  - `python -m evaluation.run_evals`
+  - `python -m pytest`
 
 ---
 
-## Phase 6: Interactive Streamlit UI & Memory Inspector
+## Phase 6: Interactive Streamlit UI & Memory Inspector *(Completed)*
 - **Scope**:
-  - Multi-user simulation selector (e.g., Alice - DevOps Lead, Bob - Backend Eng, Charlie - Support).
-  - Multi-turn chat interface with live session loading and thread persistence.
-  - Collapsible citation drawer displaying cited `chunk_id`, document `title`, and source excerpt.
-  - Long-Term Memory Management panel allowing users to inspect what is remembered, edit entries, or trigger "forget" operations.
-  - Execution trace viewer / status badge indicating routing decisions and verification verdicts.
-- **Files Expected**:
+  - Multi-user simulation selector (Alice - DevOps Lead, Bob - Backend Eng, Charlie - Support) with strict isolation.
+  - Multi-turn chat interface with live SQLite session loading, thread switching, and auto-titling.
+  - Collapsible citation drawer displaying cited `chunk_id`, document `title`, `source_url`, and chunk excerpts.
+  - Complete Long-Term Memory Management panel allowing users to inspect, add, edit, or forget records with confirmation.
+  - Execution trace viewer indicating routing decisions, fallback status, verifier verdicts, and LangSmith status.
+  - Modular component architecture (`app/components.py`, `app/main.py`) with cached runtime (`@st.cache_resource`).
+- **Files Created / Updated**:
   - `app/main.py`
   - `app/components.py`
+  - `tests/test_ui.py`
+  - `pyproject.toml`
+  - `src/asterline/memory/service.py`
+  - `src/asterline/memory/store.py`
 - **Dependencies**: Phase 5.
 - **Acceptance Criteria**:
   - Restarting the app preserves conversation history and stored memories for the selected user.
-  - Switching between users completely updates the view with zero context leakage.
+  - Switching between users completely re-scopes view with zero cross-user context leakage.
   - One-click launch via single command (`streamlit run app/main.py`).
+  - Streamlit boot verified via HTTP 200 smoke test on port 8505.
 - **Verification Tests**:
+  - `tests/test_ui.py` (6 tests passed).
+  - Full test suite: 116 tests passing.
   - Manual UI workflow walk-through and automated component smoke test.
-
----
-
-## Phase 7: Evaluation Suite, LangSmith Benchmarking & Failure Analysis
-- **Scope**:
-  - Curated evaluation datasets:
-    - `evaluation/datasets/research.jsonl`: 20+ grounded questions with ground truth chunk IDs.
-    - `evaluation/datasets/memory.jsonl`: Multi-turn memory recall, correction, and isolation tests.
-    - `evaluation/datasets/routing.jsonl`: Intent classification test cases.
-  - Automated evaluation harness computing Groundedness, Citation Precision/Recall, and Memory Safety.
-  - Representative failure analysis documenting edge cases, model limitations, and iterative improvements.
-- **Files Expected**:
-  - `evaluation/evaluators.py`
-  - `evaluation/run_evals.py`
-  - `docs/evaluation.md`
-  - `docs/failure_analysis.md`
-- **Dependencies**: Phase 6.
-- **Acceptance Criteria**:
-  - $>90\%$ Citation validity score.
-  - $100\%$ Isolation across synthetic user test cases.
-  - Documented failure cases with analysis and corrective prompt/logic adjustments.
-- **Verification Tests**:
-  - `python -m evaluation.run_evals`.
 
 ---
 

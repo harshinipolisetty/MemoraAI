@@ -138,3 +138,10 @@ class ResearchAssistantState(TypedDict, total=False):
 
     error: Optional[str]
     """Safe error message in case of unrecoverable failure or provider fault."""
+
+    is_fallback: bool
+    """True if deterministic fallback was used instead of live LLM model generation."""
+
+    llm_metadata: Dict[str, Any]
+    """Metadata regarding LLM provider execution, model, latency, or fallback error."""
+

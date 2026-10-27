@@ -97,35 +97,108 @@ Key configuration parameters:
 - `LANGCHAIN_API_KEY`: Your LangSmith API key
 - `LANGCHAIN_PROJECT`: `asterline-research-assistant`
 
-### 3. Initialize & Launch (Planned)
-```bash
-# 1. Ingest corpus and build local vector index
-python -m asterline.rag.ingestion
+### 3. The Four Core Agents & Responsibilities
 
-# 2. Run the Streamlit Application
-streamlit run app/main.py
+The system orchestrates four specialized agents to balance factual precision with workspace personalization:
+1. **Documentation Research Agent** ([`src/asterline/agents/documentation.py`](src/asterline/agents/documentation.py)):
+   - Focuses on direct, single-topic factual questions (pricing plans, API limits, query syntax).
+   - Generates grounded drafts citing exact chunk identifiers and document titles.
+   - Explicitly abstains with empty citations when documentation is absent.
+2. **Investigation Research Agent** ([`src/asterline/agents/investigation.py`](src/asterline/agents/investigation.py)):
+   - Synthesizes complex multi-document incidents (e.g., `INC-2025-08`, `INC-2025-12`).
+   - Automatically identifies and resolves temporal policy supersessions (newer published chunks override older deprecated policies).
+   - Cross-examines version evolution across product releases.
+3. **Memory Manager Agent** ([`src/asterline/agents/memory_manager.py`](src/asterline/agents/memory_manager.py)):
+   - Extracts and sanitizes durable user context (deployment environments, tooling preferences, project roles).
+   - Enforces strict safety policies: rejects API keys, passwords, and product-wide company assertions.
+   - Manages permanent cryptographic/physical purging upon forget requests.
+4. **Verification Agent** ([`src/asterline/agents/verification.py`](src/asterline/agents/verification.py)):
+   - Acts as an independent fact-checker auditing draft answers against retrieved evidence.
+   - Flags fabricated chunk IDs or ungrounded claims and commands bounded revision retries (max 2).
+   - Audits privacy to prevent cross-user memory leakage.
+
+---
+
+## 4. Setup, Installation & Launch Guide
+
+### Prerequisites
+- Python 3.10+
+- `pip` package manager
+
+### 1. Installation
+```bash
+# Clone the repository
+git clone https://github.com/<your-username>/asterline-research-assistant.git
+cd asterline-research-assistant
+
+# Install project dependencies
+pip install -e .
+pip install -e ".[test]"
 ```
 
+### 2. Environment Configuration
+Copy `.env.example` to `.env`:
+```bash
+cp .env.example .env
+```
+Key configuration parameters:
+- `LLM_PROVIDER`: `groq` (default fast Llama-3.3-70B), `openai`, `gemini`, or `anthropic`
+- `LLM_API_KEY`: Your model provider API key (optional; defaults to deterministic offline synthesis)
+- `LANGCHAIN_TRACING_V2`: `true` (optional; defaults to `false`)
+- `LANGCHAIN_API_KEY`: Your LangSmith API key
+- `LANGCHAIN_PROJECT`: `asterline-research-assistant`
+
 ---
 
-## 5. Evaluation & Observability Strategy
+## 5. Execution Commands
 
-The project includes an automated evaluation harness under `evaluation/`:
-- **Groundedness & Factuality**: Evaluating generated answers against gold-standard citations from the 75 chunks.
-- **Temporal Conflict Resolution**: Verifying that questions about superseded policies correctly cite the latest policy and acknowledge the change.
-- **Memory Safety & Isolation**: Testing that User A cannot view User B's preferences, and that forget requests completely purge records.
-- **LangSmith Tracing**: Every execution run logs the chosen route, agent invocations, retrieval chunks, and verification verdicts for inspection.
+### 1. Launch Interactive Streamlit UI
+```bash
+streamlit run app/main.py
+```
+*Opens the modern dark-mode research workspace at `http://localhost:8501`. Includes multi-user demonstration switching (Alice, Bob, Charlie), persistent conversation threads, expandable citations, full Memory Inspector, and live agent trace panels.*
+
+### 2. Run Reproducible Offline Evaluations
+```bash
+python -m evaluation.run_evals
+```
+*Evaluates 50 test cases across retrieval (Hit Rate, Recall, MRR), citation validity (100%), grounding (100%), abstention (100%), temporal supersession (100%), routing (100%), and memory isolation/purges (100%). Zero paid API calls required.*
+
+### 3. Run Automated Test Suite
+```bash
+python -m pytest
+```
+*Runs all 116 unit, integration, and regression tests across agents, memory, retrieval, workflow, evaluation, and Streamlit UI.*
 
 ---
 
-## 6. Project Roadmap
+## 6. Demonstration Profiles & Limitations
 
-Please refer to [docs/implementation_plan.md](docs/implementation_plan.md) for detailed progress through the 8 project phases.
+The sidebar provides an instant profile switcher between:
+- **Alice** (`user_alice`): DevOps Lead (Focus: Pipelines, BigQuery/Snowflake warehouse exports, deployments)
+- **Bob** (`user_bob`): Backend Platform Engineer (Focus: AQL queries, ingestion endpoints, SDK batching)
+- **Charlie** (`user_charlie`): Customer Support & QA (Focus: Enterprise SLAs, incident timelines, Signals alert rules)
+
+> [!IMPORTANT]
+> **Demonstration Identity Notice**: The user profile selector is a demonstration identity simulation mechanism, not production authentication (e.g. OAuth2/SAML). However, all underlying SQLite operations, conversation threads, and memory records are **strictly partitioned and isolated** by `user_id`. Alice, Bob, and Charlie can never access, mutate, or purge each other's data.
+
+---
+
+## 7. Evaluation & Observability Summary
+
+- **Evaluation Benchmark**: Full formulas, datasets, and actual metric outputs are documented in [docs/evaluation.md](docs/evaluation.md).
+- **Failure Analysis**: Technical retrospective of observed failure modes (nearest-neighbor trap, regex boundary clipping, soft-delete retention) and fixes is in [docs/failure_analysis.md](docs/failure_analysis.md).
+- **LangSmith Tracing**: Implemented in [`src/asterline/observability/tracing.py`](src/asterline/observability/tracing.py). Automatically redacts secrets, credentials, and passwords before dispatch, and protects personal memory from trace tags and metadata. Operates in non-blocking offline mode when credentials are absent.
+
+---
+
+## 8. Project Roadmap
+
+Please refer to [docs/implementation_plan.md](docs/implementation_plan.md) for detailed progress through all project phases.
 - [x] **Phase 1**: Architecture Foundation, System Specification & Scaffolding
 - [x] **Phase 2**: Configuration, Typed State Schemas & SQLite Persistence
 - [x] **Phase 3**: Local Vector Store & Hybrid Retrieval Engine
 - [x] **Phase 4**: Agent Core, Temporal Resolution & Guardrails
-- [x] **Phase 5**: LangGraph Multi-Agent Orchestration & Routing
-- [ ] **Phase 6**: Streamlit UI & Interactive Memory Inspector
-- [ ] **Phase 7**: Evaluation Harness & Failure Analysis
-- [ ] **Phase 8**: Project Polish & Final AI Disclosure
+- [x] **Phase 5**: Evaluation Harness, LangSmith Observability & System Hardening
+- [x] **Phase 6**: Interactive Streamlit UI & Multi-User Simulation *(116 tests passing, smoke-tested)*
+- [ ] **Phase 7**: AI Disclosure, Submission Packaging & Final Polish

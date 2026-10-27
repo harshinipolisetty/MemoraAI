@@ -5,12 +5,14 @@ historical changelog comparisons, and conflicting policy reconciliations.
 Integrates ConflictResolutionEngine to evaluate temporal supersession.
 """
 
+import re
 from typing import Any, Dict, List, Optional
 from asterline.agents.conflict_resolution import ConflictResolutionEngine
 from asterline.agents.llm import LLMClient
 from asterline.graph.state import Citation, RetrievedChunk
 from asterline.guardrails.input import wrap_user_prompt
 from asterline.rag.retriever import HybridRetriever
+
 
 
 class InvestigationAgent:
@@ -29,16 +31,22 @@ class InvestigationAgent:
         query: str,
         user_memories: Optional[List[Dict[str, Any]]] = None,
         feedback: Optional[str] = None,
+        existing_chunks: Optional[List[RetrievedChunk]] = None,
     ) -> Dict[str, Any]:
         """Execute deep investigation across multiple documents with conflict resolution."""
-        # 1. Retrieve candidate chunks with a wider Top-K for multi-document synthesis
-        retrieved = self.retriever.hybrid_search(query, top_k=6)
+        # 1. Retrieve candidate chunks with a wider Top-K for multi-document synthesis or reuse preserved evidence
+        if existing_chunks is not None:
+            retrieved = existing_chunks
+        else:
+            retrieved = self.retriever.hybrid_search(query, top_k=6)
 
         if not retrieved:
             return {
                 "draft_response": "Investigation concluded: No authoritative company records were found relating to this inquiry.",
                 "citations": [],
                 "retrieved_chunks": [],
+                "is_fallback": False,
+                "llm_metadata": {"reason": "no_chunks_found"},
             }
 
         # 2. Run Conflict & Temporal Resolution Engine
@@ -84,8 +92,11 @@ class InvestigationAgent:
             f"Investigation Query:\n{wrap_user_prompt(query)}"
         )
 
-        # 4. Generate draft answer
-        if not self.llm.settings.llm_api_key or self.llm.mock_synthesizer is not None:
+        # 4. Generate draft answer with explicit fallback tracking
+        is_fallback = False
+        llm_metadata: Dict[str, Any] = {}
+
+        if not self.llm.settings.llm_api_key and self.llm.mock_synthesizer is None:
             # Deterministic synthesis for test reproducibility and offline environments
             draft_parts = [
                 f"Investigation summary for: '{query}'",
@@ -96,13 +107,34 @@ class InvestigationAgent:
                 if matching:
                     draft_parts.append(f"According to {matching.title} [{matching.chunk_id}]: {matching.text}")
             draft = "\n\n".join(draft_parts)
+            is_fallback = True
+            llm_metadata = {
+                "provider": self.llm.settings.llm_provider,
+                "model": self.llm.settings.llm_model,
+                "is_fallback": True,
+                "fallback_reason": "No LLM API key configured (offline deterministic fallback)",
+                "error": None,
+            }
         else:
-            draft = self.llm.generate(prompt=user_content, system_prompt=system_prompt)
+            llm_res = self.llm.generate_with_metadata(prompt=user_content, system_prompt=system_prompt)
+            draft = llm_res.content
+            is_fallback = llm_res.is_fallback
+            llm_metadata = {
+                "provider": llm_res.provider,
+                "model": llm_res.model,
+                "is_fallback": llm_res.is_fallback,
+                "fallback_reason": llm_res.fallback_reason,
+                "error": llm_res.error,
+            }
 
         # 5. Extract Citations
+        chunk_map = {c.chunk_id: c for c in retrieved}
+        extracted_cids = list(dict.fromkeys(re.findall(r"\[([a-zA-Z0-9_\-]+:\d+)\]", draft)))
+
         citations: List[Citation] = []
-        for c in retrieved:
-            if f"[{c.chunk_id}]" in draft or c.chunk_id in draft or c.chunk_id in resolution.controlling_chunk_ids:
+        for cid in extracted_cids:
+            if cid in chunk_map:
+                c = chunk_map[cid]
                 citations.append(
                     Citation(
                         chunk_id=c.chunk_id,
@@ -111,10 +143,35 @@ class InvestigationAgent:
                         source_url=c.source_url,
                     )
                 )
+            else:
+                # Fabricated or unretrieved citation detected in draft text
+                doc_part = cid.split(":")[0] if ":" in cid else cid
+                citations.append(
+                    Citation(
+                        chunk_id=cid,
+                        doc_id=doc_part,
+                        title="Unknown (Unverified)",
+                        source_url="",
+                    )
+                )
+
+        if not citations:
+            for c in retrieved:
+                if f"[{c.chunk_id}]" in draft or c.chunk_id in draft or c.chunk_id in resolution.controlling_chunk_ids:
+                    citations.append(
+                        Citation(
+                            chunk_id=c.chunk_id,
+                            doc_id=c.doc_id,
+                            title=c.title,
+                            source_url=c.source_url,
+                        )
+                    )
 
         return {
             "draft_response": draft,
             "citations": citations,
             "retrieved_chunks": retrieved,
             "resolution": resolution,
+            "is_fallback": is_fallback,
+            "llm_metadata": llm_metadata,
         }
