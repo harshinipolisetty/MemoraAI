@@ -25,7 +25,7 @@ from asterline.config.settings import Settings, get_settings
 from asterline.graph.workflow import WorkflowBuilder
 from asterline.memory.service import MemoryService
 from asterline.memory.store import SQLiteStore
-from asterline.observability.tracing import check_langsmith_status
+from asterline.observability.tracing import check_langsmith_status, setup_tracing
 from asterline.rag.ingestion import load_and_validate_corpus
 from asterline.rag.retriever import HybridRetriever
 
@@ -74,7 +74,10 @@ def get_runtime() -> Dict[str, Any]:
     store = SQLiteStore(sqlite_path)
     memory_service = MemoryService(store)
 
-    # 4. Compile LangGraph Multi-Agent Workflow
+    # 4. Activate LangSmith tracing if configured
+    setup_tracing()
+
+    # 5. Compile LangGraph Multi-Agent Workflow
     builder = WorkflowBuilder(
         retriever=retriever,
         memory_service=memory_service,
