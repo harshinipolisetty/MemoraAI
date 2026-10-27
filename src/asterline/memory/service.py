@@ -1,0 +1,268 @@
+"""High-level application service for conversations and long-term memory.
+
+Coordinates between SQLiteStore and MemoryPolicy to guarantee:
+- Strict user-level isolation and ownership verification.
+- Policy enforcement: rejecting secrets and transient chatter before persistence.
+- Transactional mutations with non-sensitive audit logging.
+- Conversation continuity across sessions and restarts.
+"""
+
+import json
+from typing import Any, Dict, List, Optional
+import uuid
+from asterline.graph.state import Citation, ConversationMessage, MemoryItem
+from asterline.memory.policy import MemoryPolicyDecision, evaluate_memory_candidate
+from asterline.memory.store import SQLiteStore
+
+
+class MemoryService:
+    """Coordinates persistent memory operations, policy checks, and conversation history."""
+
+    def __init__(self, store: SQLiteStore):
+        self.store = store
+
+    # -------------------------------------------------------------------------
+    # Conversation Methods
+    # -------------------------------------------------------------------------
+
+    def get_or_create_conversation(
+        self,
+        user_id: str,
+        conversation_id: Optional[str] = None,
+        title: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Retrieve an existing conversation or create a new one owned by user_id."""
+        if conversation_id:
+            existing = self.store.get_conversation(conversation_id, user_id)
+            if existing:
+                return existing
+            # If conversation_id was requested but does not exist under this user, create it with that ID
+            conv_id = conversation_id
+        else:
+            conv_id = f"conv_{uuid.uuid4().hex[:12]}"
+
+        conv_title = title or "New Investigation"
+        return self.store.create_conversation(conv_id, user_id, conv_title)
+
+    def append_message(
+        self,
+        conversation_id: str,
+        user_id: str,
+        role: str,
+        content: str,
+        citations: Optional[List[Dict[str, Any]]] = None,
+        route_taken: Optional[str] = None,
+    ) -> ConversationMessage:
+        """Append a message turn to a conversation owned by user_id."""
+        message_id = f"msg_{uuid.uuid4().hex[:12]}"
+        citations_json = json.dumps(citations) if citations else None
+
+        row = self.store.add_message(
+            message_id=message_id,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            role=role,
+            content=content,
+            citations_json=citations_json,
+            route_taken=route_taken,
+        )
+
+        parsed_citations: List[Citation] = []
+        if row["citations_json"]:
+            try:
+                raw_cits = json.loads(row["citations_json"])
+                parsed_citations = [Citation(**c) for c in raw_cits]
+            except Exception:
+                parsed_citations = []
+
+        return ConversationMessage(
+            message_id=row["message_id"],
+            conversation_id=row["conversation_id"],
+            user_id=row["user_id"],
+            role=row["role"],
+            content=row["content"],
+            citations=parsed_citations,
+            route_taken=row["route_taken"],
+            created_at=str(row["created_at"]),
+        )
+
+    def get_conversation_messages(
+        self, conversation_id: str, user_id: str
+    ) -> List[ConversationMessage]:
+        """Retrieve chronological messages for a conversation, enforcing ownership."""
+        rows = self.store.get_messages(conversation_id, user_id)
+        messages: List[ConversationMessage] = []
+        for r in rows:
+            parsed_cits = []
+            if r["citations_json"]:
+                try:
+                    parsed_cits = [Citation(**c) for c in json.loads(r["citations_json"])]
+                except Exception:
+                    pass
+            messages.append(
+                ConversationMessage(
+                    message_id=r["message_id"],
+                    conversation_id=r["conversation_id"],
+                    user_id=r["user_id"],
+                    role=r["role"],
+                    content=r["content"],
+                    citations=parsed_cits,
+                    route_taken=r["route_taken"],
+                    created_at=str(r["created_at"]),
+                )
+            )
+        return messages
+
+    # -------------------------------------------------------------------------
+    # Long-Term User Memory Methods
+    # -------------------------------------------------------------------------
+
+    def create_memory(
+        self,
+        user_id: str,
+        content: str,
+        category: str = "general",
+        source_message_id: Optional[str] = None,
+        reason: Optional[str] = None,
+    ) -> tuple[Optional[MemoryItem], MemoryPolicyDecision]:
+        """Evaluate content against memory policy; persist if accepted."""
+        decision = evaluate_memory_candidate(content, category)
+        if not decision.allowed:
+            return None, decision
+
+        memory_id = f"mem_{uuid.uuid4().hex[:12]}"
+        audit_id = f"aud_{uuid.uuid4().hex[:12]}"
+        sanitized_content = decision.sanitized_content or content.strip()
+
+        row = self.store.insert_memory_with_audit(
+            memory_id=memory_id,
+            user_id=user_id,
+            category=category,
+            content=sanitized_content,
+            audit_id=audit_id,
+            confidence=1.0,
+            source_message_id=source_message_id,
+            reason=reason or "Saved user memory",
+        )
+
+        item = MemoryItem(
+            memory_id=row["memory_id"],
+            user_id=row["user_id"],
+            category=row["category"],
+            content=row["content"],
+            confidence=row["confidence"],
+            source_message_id=row["source_message_id"],
+            is_active=bool(row["is_active"]),
+            created_at=str(row["created_at"]),
+            updated_at=str(row["updated_at"]),
+        )
+        return item, decision
+
+    def list_user_memories(self, user_id: str) -> List[MemoryItem]:
+        """List all active memories for the specified user."""
+        rows = self.store.list_active_memories(user_id)
+        return [
+            MemoryItem(
+                memory_id=r["memory_id"],
+                user_id=r["user_id"],
+                category=r["category"],
+                content=r["content"],
+                confidence=r["confidence"],
+                source_message_id=r["source_message_id"],
+                is_active=bool(r["is_active"]),
+                created_at=str(r["created_at"]),
+                updated_at=str(r["updated_at"]),
+            )
+            for r in rows
+        ]
+
+    def get_user_memory(self, user_id: str, memory_id: str) -> Optional[MemoryItem]:
+        """Retrieve a specific active memory, strictly validating ownership."""
+        row = self.store.get_memory(memory_id, user_id)
+        if not row:
+            return None
+        return MemoryItem(
+            memory_id=row["memory_id"],
+            user_id=row["user_id"],
+            category=row["category"],
+            content=row["content"],
+            confidence=row["confidence"],
+            source_message_id=row["source_message_id"],
+            is_active=bool(row["is_active"]),
+            created_at=str(row["created_at"]),
+            updated_at=str(row["updated_at"]),
+        )
+
+    def update_memory(
+        self,
+        user_id: str,
+        memory_id: str,
+        new_content: str,
+        reason: Optional[str] = None,
+    ) -> tuple[Optional[MemoryItem], MemoryPolicyDecision]:
+        """Update an existing memory if the user owns it and the new content passes policy."""
+        # Check ownership first
+        existing = self.store.get_memory(memory_id, user_id)
+        if not existing:
+            return None, MemoryPolicyDecision(
+                allowed=False,
+                reason_code="NOT_FOUND_OR_UNAUTHORIZED",
+                message="Target memory not found or not owned by the specified user.",
+            )
+
+        decision = evaluate_memory_candidate(new_content, existing["category"])
+        if not decision.allowed:
+            return None, decision
+
+        audit_id = f"aud_{uuid.uuid4().hex[:12]}"
+        sanitized = decision.sanitized_content or new_content.strip()
+
+        row = self.store.update_memory_with_audit(
+            memory_id=memory_id,
+            user_id=user_id,
+            new_content=sanitized,
+            audit_id=audit_id,
+            reason=reason or "User updated memory content",
+        )
+        if not row:
+            return None, MemoryPolicyDecision(
+                allowed=False,
+                reason_code="UPDATE_FAILED",
+                message="Memory update failed.",
+            )
+
+        item = MemoryItem(
+            memory_id=row["memory_id"],
+            user_id=row["user_id"],
+            category=row["category"],
+            content=row["content"],
+            confidence=row["confidence"],
+            source_message_id=row["source_message_id"],
+            is_active=bool(row["is_active"]),
+            created_at=str(row["created_at"]),
+            updated_at=str(row["updated_at"]),
+        )
+        return item, decision
+
+    def delete_memory(
+        self,
+        user_id: str,
+        memory_id: str,
+        reason: Optional[str] = None,
+    ) -> bool:
+        """Deactivate (forget) an owned memory and record an audit log event."""
+        audit_id = f"aud_{uuid.uuid4().hex[:12]}"
+        return self.store.delete_memory_with_audit(
+            memory_id=memory_id,
+            user_id=user_id,
+            audit_id=audit_id,
+            reason=reason or "User requested deletion (forget)",
+        )
+
+    def is_memory_active(self, user_id: str, memory_id: str) -> bool:
+        """Check whether a specific memory remains active for this user."""
+        return self.store.get_memory(memory_id, user_id) is not None
+
+    def get_audit_log(self, user_id: str) -> List[Dict[str, Any]]:
+        """Retrieve audit log events for the specified user."""
+        return self.store.list_audit_events(user_id)
