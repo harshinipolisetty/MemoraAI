@@ -22,9 +22,11 @@ class InvestigationAgent:
         self,
         retriever: HybridRetriever,
         llm_client: Optional[LLMClient] = None,
+        max_tokens: int = 1500,
     ):
         self.retriever = retriever
         self.llm = llm_client or LLMClient()
+        self.max_tokens = max_tokens
 
     def investigate(
         self,
@@ -76,13 +78,13 @@ class InvestigationAgent:
 
         system_prompt = (
             "You are the Investigation Research Agent for Asterline Labs.\n"
-            "Synthesize a thorough, multi-document investigation report.\n"
+            "Synthesize a thorough, multi-document investigation report grounded strictly in the provided evidence.\n"
             "Rules:\n"
-            "1. State the factual findings directly supported by evidence.\n"
-            "2. Explain chronological timelines, root causes, or version evolutions.\n"
-            "3. Explicitly acknowledge superseded policies vs current policies.\n"
-            "4. Cite supporting chunk IDs in square brackets, e.g. [incident-12:1] [release-21:2].\n"
-            "5. Acknowledge when a conflict cannot be resolved or an announcement has not occurred."
+            "1. State factual findings clearly, citing supporting chunk IDs in square brackets (e.g. [incident-12:1] [release-21:2]). When analyzing an incident, always cite the specific incident report chunk (e.g., [incident-12:1]) explaining the root cause and any release chunk documenting the fix.\n"
+            "2. Explain chronological timelines, root causes, and version evolutions in detail.\n"
+            "3. Explicitly acknowledge superseded policies vs current/controlling policies based on the temporal analysis.\n"
+            "4. Acknowledge when a conflict cannot be resolved or an announcement has not occurred.\n"
+            "5. Never invent chunk IDs or unsupported factual claims."
         )
 
         user_content = (
@@ -116,8 +118,14 @@ class InvestigationAgent:
                 "error": None,
             }
         else:
-            llm_res = self.llm.generate_with_metadata(prompt=user_content, system_prompt=system_prompt)
+            llm_res = self.llm.generate_with_metadata(
+                prompt=user_content,
+                system_prompt=system_prompt,
+                max_tokens=self.max_tokens,
+            )
             draft = llm_res.content
+            # Normalize Unicode hyphens (e.g. non-breaking hyphens \u2011, en-dashes \u2013) to standard ASCII hyphens
+            draft = draft.replace("\u2011", "-").replace("\u2012", "-").replace("\u2013", "-").replace("\u2014", "-")
             is_fallback = llm_res.is_fallback
             llm_metadata = {
                 "provider": llm_res.provider,

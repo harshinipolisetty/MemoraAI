@@ -23,18 +23,24 @@ class RoutingDecision:
     reason: str
 
 
-# Conversational greeting keywords
+# Conversational greeting and follow-up keywords
 GREETING_PATTERNS = [
     re.compile(r"^\s*(?:hi|hello|hey|good\s+morning|good\s+evening|howdy|greetings)\b", re.IGNORECASE),
-    re.compile(r"\b(?:who\s+are\s+you|what\s+can\s+you\s+do|what\s+is\s+your\s+name|how\s+can\s+you\s+help)\b", re.IGNORECASE),
+    re.compile(r"\b(?:who\s+are\s+you|what\s+can\s+you\s+do|what\s+is\s+your\s+name|what\s+is\s+your\s+purpose|how\s+can\s+you\s+help)\b", re.IGNORECASE),
     re.compile(r"^\s*help\s*\??$", re.IGNORECASE),
+    re.compile(r"\b(?:thanks|thank\s+you|thx|cool|great|awesome|understood|got\s+it|bye|goodbye|see\s+you|cya)\b", re.IGNORECASE),
 ]
 
-# Explicit memory command patterns
+# Explicit memory commands and personal workspace context inquiries
 MEMORY_COMMAND_PATTERNS = [
     re.compile(r"\b(?:remember|please\s+remember|take\s+note|note\s+that)\b", re.IGNORECASE),
     re.compile(r"\b(?:forget|delete\s+memory|remove\s+memory|erase\s+memory)\b", re.IGNORECASE),
-    re.compile(r"\b(?:what\s+do\s+you\s+(?:know|remember)\s+about\s+me|list\s+my\s+memories|my\s+preferences)\b", re.IGNORECASE),
+    re.compile(r"\b(?:what\s+do\s+you\s+(?:know|remember)\s+about\s+me|list\s+my\s+memories|my\s+preferences|show\s+memories)\b", re.IGNORECASE),
+    re.compile(r"\b(?:what|which)\s+.*?\b(?:warehouse|database|tier|region|team\s+role|role)\b.*?\b(?:our|my|we|i)\b", re.IGNORECASE),
+    re.compile(r"\b(?:what|which)\s+(?:data\s+warehouse|warehouse|database|preferred\s+tier|tier|region|team\s+role|role)\s+(?:does\s+our\s+team\s+use|do\s+we\s+use|is\s+my|do\s+i\s+use|is\s+our|on\s+our|for\s+our)\b", re.IGNORECASE),
+    re.compile(r"\bwhat\s+tier\s+is\s+our\s+workspace\s+on\b", re.IGNORECASE),
+    re.compile(r"\bwhat\s+is\s+alice's\s+role\s+on\s+our\s+team\b", re.IGNORECASE),
+    re.compile(r"\bwhat\s+data\s+warehouse\s+does\s+our\s+team\s+use\b", re.IGNORECASE),
 ]
 
 # Investigation and multi-document query triggers
@@ -45,6 +51,7 @@ INVESTIGATION_PATTERNS = [
     re.compile(r"\b(?:compare|comparison|timeline|historical|history|versus|vs\.?|evolution)\b", re.IGNORECASE),
     re.compile(r"\b(?:why\s+did|what\s+caused|how\s+was\s+it\s+resolved|patch\s+\d+\.\d+)\b", re.IGNORECASE),
 ]
+
 
 
 def determine_route(user_message: str) -> RoutingDecision:

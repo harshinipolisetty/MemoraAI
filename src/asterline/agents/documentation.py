@@ -10,8 +10,8 @@ from typing import Any, Dict, List, Optional
 from asterline.agents.llm import LLMClient
 from asterline.graph.state import Citation, RetrievedChunk
 from asterline.guardrails.input import wrap_user_prompt
+from asterline.rag.cache import DocumentationAnswerCache
 from asterline.rag.retriever import HybridRetriever
-
 
 
 class DocumentationAgent:
@@ -21,9 +21,13 @@ class DocumentationAgent:
         self,
         retriever: HybridRetriever,
         llm_client: Optional[LLMClient] = None,
+        max_tokens: int = 512,
+        cache: Optional[DocumentationAnswerCache] = None,
     ):
         self.retriever = retriever
         self.llm = llm_client or LLMClient()
+        self.max_tokens = max_tokens
+        self.cache = cache if cache is not None else DocumentationAnswerCache()
 
     def research(
         self,
@@ -33,6 +37,12 @@ class DocumentationAgent:
         existing_chunks: Optional[List[RetrievedChunk]] = None,
     ) -> Dict[str, Any]:
         """Execute focused documentation lookup and synthesize evidence-backed response."""
+        # 0. Check cache for safe, public, non-personalized answers (no user memories, no revision loop)
+        if not user_memories and not feedback and existing_chunks is None:
+            cached = self.cache.get(query, user_memories=user_memories)
+            if cached is not None:
+                return cached
+
         # 1. Retrieve candidate evidence chunks or reuse preserved evidence context
         if existing_chunks is not None:
             retrieved = existing_chunks
@@ -69,13 +79,15 @@ class DocumentationAgent:
 
         system_prompt = (
             "You are the Documentation Research Agent for Asterline Labs.\n"
-            "Answer the user query strictly and solely using the provided documentation evidence.\n"
+            "Provide direct, factual answers grounded strictly in the provided documentation evidence.\n"
             "Rules:\n"
-            "1. Ground every factual claim in the retrieved text.\n"
-            "2. Cite supporting chunk IDs in square brackets, e.g. [pricing:0].\n"
-            "3. If evidence is missing or insufficient, state that explicitly.\n"
-            "4. Distinguish current from historical specifications if noted.\n"
-            "5. Never invent chunk IDs or factual claims."
+            "1. Answer concisely and directly from retrieved evidence without unnecessary conversational preamble.\n"
+            "2. Ground every factual claim in the retrieved text.\n"
+            "3. Cite supporting chunk IDs in square brackets, e.g. [pricing:0] or [security:0].\n"
+            "4. If the query asks about a policy or feature variant (such as webhook key rotation) and retrieved evidence covers the related policy (such as project ingestion key rotation in [security:0]), cite what is documented and clarify that the specific variant is not documented.\n"
+            "5. If evidence is completely missing or absent, state clearly that the documentation does not contain this information without citations.\n"
+            "6. Distinguish current from historical specifications if noted.\n"
+            "7. Never invent chunk IDs or factual claims."
         )
 
         user_content = (
@@ -128,8 +140,14 @@ class DocumentationAgent:
                 "error": None,
             }
         else:
-            llm_res = self.llm.generate_with_metadata(prompt=user_content, system_prompt=system_prompt)
+            llm_res = self.llm.generate_with_metadata(
+                prompt=user_content,
+                system_prompt=system_prompt,
+                max_tokens=self.max_tokens,
+            )
             draft = llm_res.content
+            # Normalize Unicode hyphens to standard ASCII hyphens
+            draft = draft.replace("\u2011", "-").replace("\u2012", "-").replace("\u2013", "-").replace("\u2014", "-")
             is_fallback = llm_res.is_fallback
             llm_metadata = {
                 "provider": llm_res.provider,
@@ -189,10 +207,16 @@ class DocumentationAgent:
                     )
                 )
 
-        return {
+        result_payload = {
             "draft_response": draft,
             "citations": citations,
             "retrieved_chunks": retrieved,
             "is_fallback": is_fallback,
             "llm_metadata": llm_metadata,
         }
+
+        # Safe Caching Policy: Only cache verified, public, non-fallback results without user-specific memory
+        if not user_memories and not feedback and existing_chunks is None and not is_fallback:
+            self.cache.set(query, result_payload, user_memories=user_memories)
+
+        return result_payload

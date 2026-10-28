@@ -409,3 +409,253 @@ def test_investigation_agent_preserves_existing_chunks(shared_retriever: HybridR
     assert "is_fallback" in result
     assert "llm_metadata" in result
 
+
+# -----------------------------------------------------------------------------
+# 6. ChatGroq Client Reuse & Concurrency Safety
+# -----------------------------------------------------------------------------
+
+def test_chatgroq_client_reuse_returns_same_instance():
+    """Verify that ChatGroq instances with identical configuration are reused across calls."""
+    LLMClient.clear_client_cache()
+    client1 = LLMClient._get_groq_client(
+        model_name="llama-3.3-70b-versatile",
+        api_key="test-api-key-reuse",
+        temperature=0.0,
+        max_tokens=1024,
+        request_timeout=30.0,
+    )
+    client2 = LLMClient._get_groq_client(
+        model_name="llama-3.3-70b-versatile",
+        api_key="test-api-key-reuse",
+        temperature=0.0,
+        max_tokens=1024,
+        request_timeout=30.0,
+    )
+    assert client1 is client2, "Expected identical ChatGroq instance to be returned from cache"
+
+
+def test_chatgroq_client_distinct_configs_create_distinct_instances():
+    """Verify that different parameters produce distinct cached clients."""
+    LLMClient.clear_client_cache()
+    client1 = LLMClient._get_groq_client(
+        model_name="llama-3.3-70b-versatile",
+        api_key="test-api-key",
+        temperature=0.0,
+        max_tokens=512,
+        request_timeout=30.0,
+    )
+    client2 = LLMClient._get_groq_client(
+        model_name="llama-3.3-70b-versatile",
+        api_key="test-api-key",
+        temperature=0.0,
+        max_tokens=1500,
+        request_timeout=30.0,
+    )
+    assert client1 is not client2, "Expected distinct instances for distinct max_tokens settings"
+
+
+def test_chatgroq_client_thread_safety_concurrent_access():
+    """Verify concurrent requests for the client do not race or corrupt the cache."""
+    import concurrent.futures
+
+    LLMClient.clear_client_cache()
+    instances = []
+
+    def get_client():
+        return LLMClient._get_groq_client(
+            model_name="llama-3.3-70b-versatile",
+            api_key="concurrent-key-123",
+            temperature=0.0,
+            max_tokens=1024,
+            request_timeout=30.0,
+        )
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(get_client) for _ in range(20)]
+        for fut in concurrent.futures.as_completed(futures):
+            instances.append(fut.result())
+
+    assert len(instances) == 20
+    first_instance = instances[0]
+    for inst in instances:
+        assert inst is first_instance, "All concurrent calls must return the identical cached instance"
+
+
+def test_chatgroq_client_clear_cache():
+    """Verify clear_client_cache removes previously cached instances."""
+    LLMClient.clear_client_cache()
+    c1 = LLMClient._get_groq_client("llama-3.3-70b-versatile", "key-clear", 0.0, 1024, 30.0)
+    LLMClient.clear_client_cache()
+    c2 = LLMClient._get_groq_client("llama-3.3-70b-versatile", "key-clear", 0.0, 1024, 30.0)
+    assert c1 is not c2, "Clearing cache must result in a new instance on next call"
+
+
+# -----------------------------------------------------------------------------
+# 7. Priority 3: Route-Specific Output Limits & Prompt Optimization
+# -----------------------------------------------------------------------------
+
+def test_route_specific_output_limits_configured(shared_retriever: HybridRetriever):
+    """Verify DocumentationAgent defaults to 512 tokens and InvestigationAgent defaults to 1500 tokens."""
+    captured_kwargs = {}
+
+    class MockTrackingLLM:
+        def __init__(self):
+            self.settings = type("MockSettings", (), {
+                "llm_api_key": type("Secret", (), {"get_secret_value": lambda self: "fake-key"})(),
+                "llm_provider": "groq",
+                "llm_model": "llama-3.3-70b-versatile",
+                "llm_max_tokens": 2048,
+            })()
+            self.mock_synthesizer = None
+
+        def generate_with_metadata(self, prompt: str, system_prompt: str, max_tokens: Optional[int] = None):
+            captured_kwargs["max_tokens"] = max_tokens
+            from asterline.agents.llm import LLMResponse
+            return LLMResponse(
+                content="Sample response [pricing:0]",
+                is_fallback=False,
+                provider="mock",
+                model="mock",
+            )
+
+    tracking_llm = MockTrackingLLM()
+
+    # Documentation Agent
+    doc_agent = DocumentationAgent(retriever=shared_retriever, llm_client=tracking_llm)
+    assert doc_agent.max_tokens == 512
+    doc_agent.research("What is the cost of Team plan?")
+    assert captured_kwargs.get("max_tokens") == 512, f"Expected 512 max_tokens for doc agent, got {captured_kwargs.get('max_tokens')}"
+
+    # Investigation Agent
+    invest_agent = InvestigationAgent(retriever=shared_retriever, llm_client=tracking_llm)
+    assert invest_agent.max_tokens == 1500
+    invest_agent.investigate("Investigate incident INC-2025-12 duplicate exports")
+    assert captured_kwargs.get("max_tokens") == 1500, f"Expected 1500 max_tokens for investigation agent, got {captured_kwargs.get('max_tokens')}"
+
+
+# -----------------------------------------------------------------------------
+# 8. Priority 4: Safe Public Documentation Cache & Memory Isolation
+# -----------------------------------------------------------------------------
+
+def test_cache_hit_for_public_documentation_query(shared_retriever: HybridRetriever):
+    """Public query without personal memories is served from cache on subsequent call."""
+    from asterline.rag.cache import DocumentationAnswerCache
+    cache = DocumentationAnswerCache(corpus_hash="CORPUS_V1")
+
+    call_count = 0
+    class CountingMockLLM:
+        def __init__(self):
+            self.settings = type("MockSettings", (), {
+                "llm_api_key": type("Secret", (), {"get_secret_value": lambda self: "fake-key"})(),
+                "llm_provider": "groq",
+                "llm_model": "llama-3.3-70b-versatile",
+                "llm_max_tokens": 512,
+            })()
+            self.mock_synthesizer = None
+
+        def generate_with_metadata(self, prompt: str, system_prompt: str, max_tokens: Optional[int] = None):
+            nonlocal call_count
+            call_count += 1
+            from asterline.agents.llm import LLMResponse
+            return LLMResponse(
+                content="The Team plan costs $449/mo [pricing:0].",
+                is_fallback=False,
+                provider="mock",
+                model="mock",
+            )
+
+    agent = DocumentationAgent(retriever=shared_retriever, llm_client=CountingMockLLM(), cache=cache)
+
+    # First call: executes LLM and populates cache
+    res1 = agent.research("What is the cost of Team plan?")
+    assert call_count == 1
+    assert res1.get("is_cached") is not True
+
+    # Second identical public call: served directly from cache without LLM invocation
+    res2 = agent.research("What is the cost of Team plan?")
+    assert call_count == 1, "LLM must NOT be called on cache hit"
+    assert res2.get("is_cached") is True
+    assert res2["draft_response"] == res1["draft_response"]
+    assert len(res2["citations"]) == len(res1["citations"])
+
+
+def test_cache_never_serves_or_caches_with_user_memories(shared_retriever: HybridRetriever):
+    """Personalized queries with user memories bypass cache and never store private context."""
+    from asterline.rag.cache import DocumentationAnswerCache
+    cache = DocumentationAnswerCache(corpus_hash="CORPUS_V1")
+
+    call_count = 0
+    class CountingMockLLM:
+        def __init__(self):
+            self.settings = type("MockSettings", (), {
+                "llm_api_key": type("Secret", (), {"get_secret_value": lambda self: "fake-key"})(),
+                "llm_provider": "groq",
+                "llm_model": "llama-3.3-70b-versatile",
+                "llm_max_tokens": 512,
+            })()
+            self.mock_synthesizer = None
+
+        def generate_with_metadata(self, prompt: str, system_prompt: str, max_tokens: Optional[int] = None):
+            nonlocal call_count
+            call_count += 1
+            from asterline.agents.llm import LLMResponse
+            return LLMResponse(
+                content="The Team plan costs $449/mo [pricing:0].",
+                is_fallback=False,
+                provider="mock",
+                model="mock",
+            )
+
+    agent = DocumentationAgent(retriever=shared_retriever, llm_client=CountingMockLLM(), cache=cache)
+    personal_memories = [{"id": "m1", "content": "User prefers Snowflake warehouse", "is_active": True}]
+
+    # Query with memories
+    res = agent.research("What is the cost of Team plan?", user_memories=personal_memories)
+    assert call_count == 1
+    assert res.get("is_cached") is not True
+
+    # Check cache is completely empty
+    assert len(cache) == 0, "Personalized query must NEVER be written to public documentation cache"
+
+
+def test_cache_invalidated_by_corpus_hash_change():
+    """Cache misses when corpus hash changes."""
+    from asterline.graph.state import Citation
+    from asterline.rag.cache import DocumentationAnswerCache
+    cache1 = DocumentationAnswerCache(corpus_hash="HASH_OLD")
+    cache1.set("query test", {"draft_response": "answer [doc:0]", "citations": [Citation(chunk_id="doc:0", doc_id="doc", title="T", source_url="")]})
+
+    cache2 = DocumentationAnswerCache(corpus_hash="HASH_NEW")
+    assert cache2.get("query test") is None, "Different corpus hash must result in cache miss"
+
+
+def test_cache_never_stores_transient_fallback():
+    """Cache rejects transient fallback results."""
+    from asterline.rag.cache import DocumentationAnswerCache
+    cache = DocumentationAnswerCache(corpus_hash="HASH_A")
+    cache.set("query fallback", {"draft_response": "fallback", "is_fallback": True, "citations": []})
+    assert cache.get("query fallback") is None, "Fallback answers must never be cached"
+
+
+def test_memory_manager_personal_context_recall(memory_service: MemoryService):
+    """Memory Manager answers personal context inquiries directly from user memories with isolation."""
+    agent = MemoryManagerAgent(memory_service)
+
+    # Alice remembers her warehouse
+    agent.handle_request("user_alice", "Remember that our team uses Snowflake for data warehousing in eu-west-1.")
+
+    # Alice asks what data warehouse our team uses
+    res_alice = agent.handle_request("user_alice", "What data warehouse does our team use?")
+    assert res_alice["status"] == "COMPLETED"
+    assert "Snowflake" in res_alice["response"]
+
+    # Bob (who has no memories) asks the same question
+    res_bob = agent.handle_request("user_bob", "What data warehouse does our team use?")
+    assert res_bob["status"] == "COMPLETED"
+    assert "Snowflake" not in res_bob["response"]
+    assert "do not have any stored personal memories" in res_bob["response"].lower()
+
+
+
+
+

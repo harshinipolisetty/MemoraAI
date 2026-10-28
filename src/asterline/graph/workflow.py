@@ -82,19 +82,27 @@ class WorkflowBuilder:
         }
 
     def conversational_node(self, state: ResearchAssistantState) -> Dict[str, Any]:
-        """Handle greetings or bot identity inquiries without RAG overhead."""
-        greeting_text = (
-            "Hello! I am the Asterline Labs Research Assistant. "
-            "I can help you look up product specifications, pricing, APIs, investigate incidents (e.g., INC-2025-12), "
-            "or remember your workspace context across sessions."
-        )
+        """Handle greetings, bot identity inquiries, and polite follow-ups without RAG overhead."""
+        msg_lower = state.get("user_message", "").lower().strip()
+        if any(w in msg_lower for w in ("thanks", "thank you", "thx", "appreciate")):
+            reply_text = "You're welcome! Let me know if you need anything else."
+        elif any(w in msg_lower for w in ("bye", "goodbye", "see you", "cya")):
+            reply_text = "Goodbye! Feel free to reach out whenever you have more questions."
+        elif any(w in msg_lower for w in ("cool", "great", "awesome", "understood", "got it")):
+            reply_text = "Glad to help! Let me know if you have any other questions about Asterline."
+        else:
+            reply_text = (
+                "Hello! I am the Asterline Labs Research Assistant. "
+                "I can help you look up product specifications, pricing, APIs, investigate incidents (e.g., INC-2025-12), "
+                "or remember your workspace context across sessions."
+            )
         return {
-            "draft_response": greeting_text,
-            "final_response": greeting_text,
+            "draft_response": reply_text,
+            "final_response": reply_text,
             "citations": [],
             "retrieved_chunks": [],
             "is_fallback": False,
-            "llm_metadata": {"route": "conversational"},
+            "llm_metadata": {"route": "conversational", "llm_calls": 0, "latency_ms": 0.1},
         }
 
     def clarification_node(self, state: ResearchAssistantState) -> Dict[str, Any]:

@@ -295,3 +295,22 @@ def test_18_index_rebuild_does_not_corrupt_prior_usable_index(
     test_res = retriever.hybrid_search("Signals alert rules", top_k=2)
     assert len(test_res) > 0
     assert any("alerts" in r.chunk_id for r in test_res)
+
+
+def test_19_concurrent_hybrid_retrieval_and_embedding_cache(retriever: HybridRetriever):
+    """Test 19: Hybrid search runs concurrently with thread pool and caches query embeddings."""
+    query = "What is the monthly price of Launch plan?"
+
+    # First run (computes query embedding)
+    res1 = retriever.hybrid_search(query, top_k=3)
+    assert len(res1) > 0
+    assert any(r.chunk_id == "pricing:0" for r in res1)
+
+    # Embedding is cached in embedder
+    assert query.strip() in retriever.embedder._query_cache
+
+    # Second run (hits embedding cache, runs dense + keyword concurrently)
+    res2 = retriever.hybrid_search(query, top_k=3)
+    assert len(res2) == len(res1)
+    assert res2[0].chunk_id == res1[0].chunk_id
+

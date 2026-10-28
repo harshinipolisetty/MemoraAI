@@ -9,6 +9,7 @@ Zero external API dependencies for embedding generation or vector search.
 """
 
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 import math
 from pathlib import Path
 import re
@@ -130,13 +131,14 @@ class LocalBM25Index:
 
 
 class EmbeddingEngine:
-    """Local FastEmbed wrapper with model caching."""
+    """Local FastEmbed wrapper with model caching and query embedding cache."""
 
     _instance: Optional["EmbeddingEngine"] = None
     _model: Optional[TextEmbedding] = None
 
     def __init__(self, model_name: str = "BAAI/bge-small-en-v1.5"):
         self.model_name = model_name
+        self._query_cache: Dict[str, List[float]] = {}
         if EmbeddingEngine._model is None:
             EmbeddingEngine._model = TextEmbedding(model_name=self.model_name)
 
@@ -149,12 +151,18 @@ class EmbeddingEngine:
         return [emb.tolist() for emb in generator]
 
     def embed_query(self, query: str) -> List[float]:
-        """Generate dense embedding vector for a single query."""
+        """Generate dense embedding vector for a single query with LRU-like dictionary caching."""
         if not query or not query.strip():
             return []
+        q_norm = query.strip()
+        if q_norm in self._query_cache:
+            return self._query_cache[q_norm]
         assert EmbeddingEngine._model is not None
-        generator = EmbeddingEngine._model.embed([query])
-        return list(generator)[0].tolist()
+        generator = EmbeddingEngine._model.embed([q_norm])
+        emb = list(generator)[0].tolist()
+        if len(self._query_cache) < 2048:
+            self._query_cache[q_norm] = emb
+        return emb
 
 
 class HybridRetriever:
@@ -188,6 +196,9 @@ class HybridRetriever:
             name=self.collection_name,
             metadata={"hnsw:space": "cosine"},
         )
+
+        # Thread pool for concurrent dense and keyword retrieval
+        self._executor = ThreadPoolExecutor(max_workers=2)
 
         # Synchronize index idempotently
         self.sync_index()
@@ -295,12 +306,15 @@ class HybridRetriever:
         # Retrieve a broader candidate pool for fusion (up to 20 candidates per channel)
         candidate_k = min(max(top_k * 3, 15), len(self.corpus_chunks))
 
-        dense_results = self.dense_search(
-            query=query, top_k=candidate_k, metadata_filter=metadata_filter
+        # Execute dense vector and lexical BM25 retrieval concurrently
+        future_dense = self._executor.submit(
+            self.dense_search, query, candidate_k, metadata_filter
         )
-        keyword_results = self.keyword_search(
-            query=query, top_k=candidate_k, metadata_filter=metadata_filter
+        future_keyword = self._executor.submit(
+            self.keyword_search, query, candidate_k, metadata_filter
         )
+        dense_results = future_dense.result()
+        keyword_results = future_keyword.result()
 
         rrf_constant = 60.0
         scores: Dict[str, float] = {}

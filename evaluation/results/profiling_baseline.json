@@ -1,0 +1,250 @@
+{
+  "summary": {
+    "p50_total_ms": 687.7,
+    "p95_total_ms": 3105.07,
+    "mean_total_ms": 1152.91,
+    "min_total_ms": 39.52,
+    "max_total_ms": 3090.37,
+    "avg_input_guardrails_ms": 3.38,
+    "avg_routing_ms": 0.09,
+    "avg_retrieval_ms": 18.62,
+    "avg_embedding_ms": 12.41,
+    "avg_chroma_dense_ms": 5.68,
+    "avg_bm25_ms": 0.48,
+    "avg_rrf_ms": 0.05,
+    "init_total_ms": 694.01
+  },
+  "queries": [
+    {
+      "id": "Q1_factual_sla",
+      "type": "factual",
+      "query": "What is the contractual monthly uptime commitment in the Enterprise Service Level Agreement?",
+      "route": "factual",
+      "total_ms": 3057.7,
+      "input_guardrails_ms": 0.79,
+      "routing_ms": 0.05,
+      "retrieval": {
+        "embedding_dur_ms": 11.58,
+        "chroma_dense_dur_ms": 3.63,
+        "bm25_keyword_dur_ms": 0.33,
+        "rrf_fusion_dur_ms": 0.03,
+        "total_retrieval_dur_ms": 15.58
+      },
+      "retries": 0,
+      "llm_calls": 1,
+      "is_cached": false,
+      "is_fallback": false,
+      "response_len": 101,
+      "citations": [
+        "sla:0"
+      ]
+    },
+    {
+      "id": "Q2_factual_repeat_sla",
+      "type": "factual_repeat",
+      "query": "What is the contractual monthly uptime commitment in the Enterprise Service Level Agreement?",
+      "route": "factual",
+      "total_ms": 68.93,
+      "input_guardrails_ms": 8.18,
+      "routing_ms": 0.2,
+      "retrieval": {
+        "embedding_dur_ms": 11.58,
+        "chroma_dense_dur_ms": 3.63,
+        "bm25_keyword_dur_ms": 0.33,
+        "rrf_fusion_dur_ms": 0.03,
+        "total_retrieval_dur_ms": 15.58
+      },
+      "retries": 0,
+      "llm_calls": 0,
+      "is_cached": true,
+      "is_fallback": false,
+      "response_len": 101,
+      "citations": [
+        "sla:0"
+      ]
+    },
+    {
+      "id": "Q3_factual_pricing",
+      "type": "factual",
+      "query": "What is the monthly subscription price of the Team plan and how many seats are included?",
+      "route": "factual",
+      "total_ms": 499.0,
+      "input_guardrails_ms": 3.02,
+      "routing_ms": 0.16,
+      "retrieval": {
+        "embedding_dur_ms": 11.91,
+        "chroma_dense_dur_ms": 4.17,
+        "bm25_keyword_dur_ms": 1.03,
+        "rrf_fusion_dur_ms": 0.08,
+        "total_retrieval_dur_ms": 17.2
+      },
+      "retries": 0,
+      "llm_calls": 1,
+      "is_cached": false,
+      "is_fallback": false,
+      "response_len": 76,
+      "citations": [
+        "pricing:0"
+      ]
+    },
+    {
+      "id": "Q4_factual_api",
+      "type": "factual",
+      "query": "What is the maximum payload size for run ingestion in POST /v2/runs?",
+      "route": "factual",
+      "total_ms": 580.11,
+      "input_guardrails_ms": 3.05,
+      "routing_ms": 0.1,
+      "retrieval": {
+        "embedding_dur_ms": 14.93,
+        "chroma_dense_dur_ms": 4.72,
+        "bm25_keyword_dur_ms": 0.46,
+        "rrf_fusion_dur_ms": 0.05,
+        "total_retrieval_dur_ms": 20.17
+      },
+      "retries": 0,
+      "llm_calls": 1,
+      "is_cached": false,
+      "is_fallback": false,
+      "response_len": 142,
+      "citations": [
+        "ingest:0"
+      ]
+    },
+    {
+      "id": "Q5_conflict_retention",
+      "type": "temporal_conflict",
+      "query": "What is the retention period for raw run records held in cold recovery storage?",
+      "route": "factual",
+      "total_ms": 851.63,
+      "input_guardrails_ms": 5.19,
+      "routing_ms": 0.11,
+      "retrieval": {
+        "embedding_dur_ms": 18.21,
+        "chroma_dense_dur_ms": 12.19,
+        "bm25_keyword_dur_ms": 0.93,
+        "rrf_fusion_dur_ms": 0.1,
+        "total_retrieval_dur_ms": 31.44
+      },
+      "retries": 0,
+      "llm_calls": 1,
+      "is_cached": false,
+      "is_fallback": false,
+      "response_len": 296,
+      "citations": [
+        "retention:0"
+      ]
+    },
+    {
+      "id": "Q6_conflict_stipend",
+      "type": "temporal_conflict",
+      "query": "What is the weekly on-call stipend?",
+      "route": "factual",
+      "total_ms": 795.29,
+      "input_guardrails_ms": 3.92,
+      "routing_ms": 0.06,
+      "retrieval": {
+        "embedding_dur_ms": 11.36,
+        "chroma_dense_dur_ms": 3.52,
+        "bm25_keyword_dur_ms": 0.37,
+        "rrf_fusion_dur_ms": 0.04,
+        "total_retrieval_dur_ms": 15.29
+      },
+      "retries": 0,
+      "llm_calls": 1,
+      "is_cached": false,
+      "is_fallback": false,
+      "response_len": 68,
+      "citations": [
+        "handbook:1"
+      ]
+    },
+    {
+      "id": "Q7_investigation_incident",
+      "type": "investigation",
+      "query": "What caused duplicate warehouse export rows in incident INC-2025-12 and how was it resolved?",
+      "route": "investigation",
+      "total_ms": 3090.37,
+      "input_guardrails_ms": 2.46,
+      "routing_ms": 0.04,
+      "retrieval": {
+        "embedding_dur_ms": 11.26,
+        "chroma_dense_dur_ms": 11.72,
+        "bm25_keyword_dur_ms": 0.41,
+        "rrf_fusion_dur_ms": 0.04,
+        "total_retrieval_dur_ms": 23.44
+      },
+      "retries": 0,
+      "llm_calls": 1,
+      "is_cached": false,
+      "is_fallback": false,
+      "response_len": 3775,
+      "citations": [
+        "release-21:2",
+        "incident-12:1"
+      ]
+    },
+    {
+      "id": "Q8_memory_remember",
+      "type": "memory_write",
+      "query": "Please remember that our team uses Snowflake for data warehousing.",
+      "route": "memory_ops",
+      "total_ms": 39.52,
+      "input_guardrails_ms": 2.56,
+      "routing_ms": 0.03,
+      "retrieval": {},
+      "retries": 0,
+      "llm_calls": 0,
+      "is_cached": false,
+      "is_fallback": false,
+      "response_len": 92,
+      "citations": []
+    },
+    {
+      "id": "Q9_memory_recall",
+      "type": "memory_read",
+      "query": "What data warehouse does our team use?",
+      "route": "factual",
+      "total_ms": 1989.9,
+      "input_guardrails_ms": 2.58,
+      "routing_ms": 0.06,
+      "retrieval": {
+        "embedding_dur_ms": 9.36,
+        "chroma_dense_dur_ms": 3.95,
+        "bm25_keyword_dur_ms": 0.26,
+        "rrf_fusion_dur_ms": 0.03,
+        "total_retrieval_dur_ms": 13.6
+      },
+      "retries": 0,
+      "llm_calls": 1,
+      "is_cached": false,
+      "is_fallback": false,
+      "response_len": 0,
+      "citations": [
+        "export:0"
+      ]
+    },
+    {
+      "id": "Q10_out_of_domain",
+      "type": "abstention",
+      "query": "What quantum teleportation protocol is used for Mars rover telemetry?",
+      "route": "factual",
+      "total_ms": 556.65,
+      "input_guardrails_ms": 2.06,
+      "routing_ms": 0.04,
+      "retrieval": {
+        "embedding_dur_ms": 11.46,
+        "chroma_dense_dur_ms": 3.56,
+        "bm25_keyword_dur_ms": 0.19,
+        "rrf_fusion_dur_ms": 0.03,
+        "total_retrieval_dur_ms": 15.24
+      },
+      "retries": 0,
+      "llm_calls": 1,
+      "is_cached": false,
+      "is_fallback": false,
+      "response_len": 120,
+      "citations": []
+    }
+  ]
+}

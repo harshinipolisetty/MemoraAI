@@ -114,3 +114,21 @@ def test_redacting_callback_sanitizes_inputs_and_outputs():
 
     sanitized_output = callback.on_tool_end("Found results with password=admin123")
     assert "[REDACTED_SECRET]" in sanitized_output
+
+
+def test_get_safe_trace_metadata_includes_performance_metrics():
+    meta = get_safe_trace_metadata(
+        user_id="user_test",
+        conversation_id="conv_perf",
+        route="factual",
+        latency_ms=124.5,
+        llm_call_count=1,
+        is_cached=True,
+    )
+    assert meta["metadata"]["latency_ms"] == 124.5
+    assert meta["metadata"]["llm_call_count"] == 1
+    assert meta["metadata"]["is_cached"] is True
+    assert "cache:hit" in meta["tags"]
+    assert "llm_calls:1" in meta["tags"]
+    assert "latency:124.5ms" in meta["tags"]
+

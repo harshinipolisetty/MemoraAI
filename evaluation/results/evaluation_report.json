@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-27T17:34:13.820792+05:30",
+  "timestamp": "2026-10-28T13:32:15.800977+05:30",
   "corpus_integrity": {
     "total_chunks": 75,
     "sha256": "F63FC05CF43204485C98BD8FB6D89860A32C16A7E906BC90975E7C3954FE9FB1"
@@ -30,11 +30,11 @@
     "standard_queries": 16,
     "abstention_queries": 4,
     "citation_validity_rate": 1.0,
-    "grounded_response_rate": 1.0,
-    "correct_abstention_rate": 1.0,
+    "grounded_response_rate": 0.9375,
+    "correct_abstention_rate": 0.75,
     "temporal_supersession_accuracy": 1.0,
-    "total_citations_evaluated": 36,
-    "valid_citations_count": 36
+    "total_citations_evaluated": 37,
+    "valid_citations_count": 37
   },
   "routing_benchmark": {
     "total_queries": 20,

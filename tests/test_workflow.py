@@ -306,3 +306,24 @@ def test_workflow_explicit_fallback_metadata(shared_retriever: HybridRetriever, 
     assert "fallback_reason" in result["llm_metadata"]
 
 
+def test_workflow_conversational_followups(workflow_app):
+    """Conversational follow-ups (thanks, bye, cool) route to conversational with 0 citations and 0 LLM calls."""
+    app, service = workflow_app
+
+    for query, expected_fragment in [
+        ("thank you so much!", "welcome"),
+        ("bye", "goodbye"),
+        ("cool", "glad to help"),
+    ]:
+        state = {
+            "user_id": "user_alice",
+            "conversation_id": f"conv_{query[:4]}",
+            "user_message": query,
+        }
+        res = app.invoke(state)
+        assert res["route"] == "conversational"
+        assert len(res["citations"]) == 0
+        assert expected_fragment in res["final_response"].lower()
+
+
+

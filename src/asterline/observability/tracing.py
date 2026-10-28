@@ -62,6 +62,9 @@ def get_safe_trace_metadata(
     route: Optional[str] = None,
     retry_count: int = 0,
     is_fallback: bool = False,
+    latency_ms: Optional[float] = None,
+    llm_call_count: Optional[int] = None,
+    is_cached: Optional[bool] = None,
     tags: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Build sanitized LangChain/LangGraph run metadata for trace export.
@@ -77,20 +80,36 @@ def get_safe_trace_metadata(
         safe_tags.append("mode:live")
     if retry_count > 0:
         safe_tags.append(f"retry:{retry_count}")
+    if is_cached is True:
+        safe_tags.append("cache:hit")
+    elif is_cached is False:
+        safe_tags.append("cache:miss")
+    if llm_call_count is not None:
+        safe_tags.append(f"llm_calls:{llm_call_count}")
+    if latency_ms is not None:
+        safe_tags.append(f"latency:{round(latency_ms, 1)}ms")
 
     if tags:
         for t in tags:
             # Scrub any accidental secrets from custom tags
             safe_tags.append(redact_secrets(str(t)))
 
+    metadata: Dict[str, Any] = {
+        "user_id": redact_secrets(user_id),
+        "conversation_id": redact_secrets(conversation_id),
+        "route": route or "unspecified",
+        "retry_count": retry_count,
+        "is_fallback": is_fallback,
+    }
+    if latency_ms is not None:
+        metadata["latency_ms"] = round(latency_ms, 2)
+    if llm_call_count is not None:
+        metadata["llm_call_count"] = llm_call_count
+    if is_cached is not None:
+        metadata["is_cached"] = is_cached
+
     return {
-        "metadata": {
-            "user_id": redact_secrets(user_id),
-            "conversation_id": redact_secrets(conversation_id),
-            "route": route or "unspecified",
-            "retry_count": retry_count,
-            "is_fallback": is_fallback,
-        },
+        "metadata": metadata,
         "tags": list(dict.fromkeys(safe_tags)),
     }
 
