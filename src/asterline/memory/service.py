@@ -20,6 +20,22 @@ class MemoryService:
 
     def __init__(self, store: SQLiteStore):
         self.store = store
+        self._conv_cache: Dict[str, List[Dict[str, Any]]] = {}
+        self._msg_cache: Dict[tuple[str, str], List[ConversationMessage]] = {}
+        self._mem_cache: Dict[str, List[MemoryItem]] = {}
+
+    def clear_cache(self, user_id: Optional[str] = None) -> None:
+        """Clear user-scoped caches, either for a specific user or globally."""
+        if user_id:
+            self._conv_cache.pop(user_id, None)
+            self._mem_cache.pop(user_id, None)
+            keys_to_del = [k for k in self._msg_cache if k[1] == user_id]
+            for k in keys_to_del:
+                self._msg_cache.pop(k, None)
+        else:
+            self._conv_cache.clear()
+            self._msg_cache.clear()
+            self._mem_cache.clear()
 
     # -------------------------------------------------------------------------
     # Conversation Methods
@@ -42,15 +58,26 @@ class MemoryService:
             conv_id = f"conv_{uuid.uuid4().hex[:12]}"
 
         conv_title = title or "New Investigation"
-        return self.store.create_conversation(conv_id, user_id, conv_title)
+        result = self.store.create_conversation(conv_id, user_id, conv_title)
+        self._conv_cache.pop(user_id, None)
+        return result
 
     def list_user_conversations(self, user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
-        """List conversation threads owned by user_id."""
-        return self.store.list_conversations(user_id, limit=limit)
+        """List conversation threads owned by user_id with user-scoped caching."""
+        if limit == 50 and user_id in self._conv_cache:
+            return list(self._conv_cache[user_id])
+
+        convs = self.store.list_conversations(user_id, limit=limit)
+        if limit == 50:
+            self._conv_cache[user_id] = convs
+        return convs
 
     def update_conversation_title(self, conversation_id: str, user_id: str, title: str) -> bool:
         """Update the title of a conversation thread owned by user_id."""
-        return self.store.update_conversation_title(conversation_id, user_id, title)
+        updated = self.store.update_conversation_title(conversation_id, user_id, title)
+        if updated:
+            self._conv_cache.pop(user_id, None)
+        return updated
 
     def append_message(
         self,
@@ -83,21 +110,30 @@ class MemoryService:
             except Exception:
                 parsed_citations = []
 
-        return ConversationMessage(
+        msg = ConversationMessage(
             message_id=row["message_id"],
             conversation_id=row["conversation_id"],
             user_id=row["user_id"],
-            role=row["role"],
+            role=role,
             content=row["content"],
             citations=parsed_citations,
             route_taken=row["route_taken"],
             created_at=str(row["created_at"]),
         )
 
+        # Invalidate affected user and conversation caches
+        self._conv_cache.pop(user_id, None)
+        self._msg_cache.pop((conversation_id, user_id), None)
+        return msg
+
     def get_conversation_messages(
         self, conversation_id: str, user_id: str
     ) -> List[ConversationMessage]:
-        """Retrieve chronological messages for a conversation, enforcing ownership."""
+        """Retrieve chronological messages for a conversation, enforcing ownership with caching."""
+        cache_key = (conversation_id, user_id)
+        if cache_key in self._msg_cache:
+            return list(self._msg_cache[cache_key])
+
         rows = self.store.get_messages(conversation_id, user_id)
         messages: List[ConversationMessage] = []
         for r in rows:
@@ -119,6 +155,8 @@ class MemoryService:
                     created_at=str(r["created_at"]),
                 )
             )
+
+        self._msg_cache[cache_key] = messages
         return messages
 
     # -------------------------------------------------------------------------
@@ -164,12 +202,16 @@ class MemoryService:
             created_at=str(row["created_at"]),
             updated_at=str(row["updated_at"]),
         )
+        self._mem_cache.pop(user_id, None)
         return item, decision
 
     def list_user_memories(self, user_id: str) -> List[MemoryItem]:
-        """List all active memories for the specified user."""
+        """List all active memories for the specified user with user-scoped caching."""
+        if user_id in self._mem_cache:
+            return list(self._mem_cache[user_id])
+
         rows = self.store.list_active_memories(user_id)
-        return [
+        items = [
             MemoryItem(
                 memory_id=r["memory_id"],
                 user_id=r["user_id"],
@@ -183,6 +225,8 @@ class MemoryService:
             )
             for r in rows
         ]
+        self._mem_cache[user_id] = items
+        return items
 
     def get_user_memory(self, user_id: str, memory_id: str) -> Optional[MemoryItem]:
         """Retrieve a specific active memory, strictly validating ownership."""
@@ -250,6 +294,7 @@ class MemoryService:
             created_at=str(row["created_at"]),
             updated_at=str(row["updated_at"]),
         )
+        self._mem_cache.pop(user_id, None)
         return item, decision
 
     def delete_memory(
@@ -260,12 +305,15 @@ class MemoryService:
     ) -> bool:
         """Deactivate (forget) an owned memory and record an audit log event."""
         audit_id = f"aud_{uuid.uuid4().hex[:12]}"
-        return self.store.delete_memory_with_audit(
+        deleted = self.store.delete_memory_with_audit(
             memory_id=memory_id,
             user_id=user_id,
             audit_id=audit_id,
             reason=reason or "User requested deletion (forget)",
         )
+        if deleted:
+            self._mem_cache.pop(user_id, None)
+        return deleted
 
     def is_memory_active(self, user_id: str, memory_id: str) -> bool:
         """Check whether a specific memory remains active for this user."""

@@ -209,8 +209,8 @@ class HybridRetriever:
         chunk_count = len(self.corpus_chunks)
 
         if not force_rebuild and existing_count == chunk_count:
-            # Verify IDs match
-            existing_ids = set(self.collection.get()["ids"])
+            # Verify IDs match without fetching large document strings or metadatas
+            existing_ids = set(self.collection.get(include=[])["ids"])
             expected_ids = set(self.chunks_by_id.keys())
             if existing_ids == expected_ids:
                 return  # Index is already up-to-date and complete

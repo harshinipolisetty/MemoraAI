@@ -152,7 +152,7 @@ def inject_custom_css() -> None:
     .main .block-container {
         max-width: 980px !important;
         padding-top: 1rem !important;
-        padding-bottom: 6rem !important;
+        padding-bottom: 1.5rem !important;
         padding-left: 1.5rem !important;
         padding-right: 1.5rem !important;
         margin: 0 auto !important;
@@ -335,17 +335,22 @@ def inject_custom_css() -> None:
     }
 
     /* -------------------------------------------------------------------------
-       Workspace Header Strip
+       Workspace Header Strip (ChatGPT Fixed Top Navigation)
        ------------------------------------------------------------------------- */
     .top-header-strip {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 100 !important;
         display: flex;
         align-items: center;
         justify-content: space-between;
         padding: 0.5rem 0.85rem;
-        background-color: var(--bg-panel);
+        background-color: var(--bg-app) !important;
+        background: var(--bg-app) !important;
         border: 1px solid var(--border-default);
         border-radius: var(--radius-md);
-        margin-bottom: 1rem;
+        margin-bottom: 0.5rem !important;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
     }
 
     .header-left {
@@ -392,15 +397,20 @@ def inject_custom_css() -> None:
     }
 
     /* -------------------------------------------------------------------------
-       Navigation Tabs (Eliminate Red Underline)
+       Navigation Tabs (ChatGPT Sticky Top Header with Fixed Z-Index)
        ------------------------------------------------------------------------- */
     .stTabs [data-baseweb="tab-list"] {
-        background-color: transparent !important;
+        position: sticky !important;
+        top: 48px !important;
+        z-index: 99 !important;
+        background-color: var(--bg-app) !important;
+        background: var(--bg-app) !important;
         border-bottom: 1px solid var(--border-default) !important;
         border-radius: 0 !important;
-        padding: 0 !important;
+        padding: 0.35rem 0.2rem !important;
         gap: 1.5rem !important;
-        margin-bottom: 1.25rem !important;
+        margin-bottom: 0.75rem !important;
+        box-shadow: 0 4px 12px rgba(11, 13, 16, 0.9) !important;
     }
 
     .stTabs [data-baseweb="tab"] {
@@ -720,6 +730,51 @@ def inject_custom_css() -> None:
     }
 
     /* -------------------------------------------------------------------------
+       ChatGPT-Style Independent Chat Scroll Container (Tab 1 Only)
+       ------------------------------------------------------------------------- */
+    .stTabs [data-baseweb="tab-panel"]:first-of-type [data-testid="stVerticalBlockBorderWrapper"],
+    .stTabs [data-baseweb="tab-panel"]:first-of-type div[data-testid="stVerticalBlock"]:has(> div[data-testid="stChatMessage"]),
+    .stTabs [data-baseweb="tab-panel"]:first-of-type div[data-testid="stVerticalBlock"]:has(> div.empty-technical-container) {
+        height: calc(100vh - 275px) !important;
+        max-height: calc(100vh - 275px) !important;
+        min-height: 380px !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        border: none !important;
+        background: transparent !important;
+        padding-right: 0.4rem !important;
+        padding-bottom: 1.5rem !important;
+        scrollbar-width: thin;
+        scrollbar-color: var(--border-default) transparent;
+        scroll-behavior: smooth;
+    }
+
+    .stTabs [data-baseweb="tab-panel"]:first-of-type [data-testid="stVerticalBlockBorderWrapper"]::-webkit-scrollbar,
+    .stTabs [data-baseweb="tab-panel"]:first-of-type div[data-testid="stVerticalBlock"]:has(> div[data-testid="stChatMessage"])::-webkit-scrollbar,
+    .stTabs [data-baseweb="tab-panel"]:first-of-type div[data-testid="stVerticalBlock"]:has(> div.empty-technical-container)::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .stTabs [data-baseweb="tab-panel"]:first-of-type [data-testid="stVerticalBlockBorderWrapper"]::-webkit-scrollbar-track,
+    .stTabs [data-baseweb="tab-panel"]:first-of-type div[data-testid="stVerticalBlock"]:has(> div[data-testid="stChatMessage"])::-webkit-scrollbar-track,
+    .stTabs [data-baseweb="tab-panel"]:first-of-type div[data-testid="stVerticalBlock"]:has(> div.empty-technical-container)::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .stTabs [data-baseweb="tab-panel"]:first-of-type [data-testid="stVerticalBlockBorderWrapper"]::-webkit-scrollbar-thumb,
+    .stTabs [data-baseweb="tab-panel"]:first-of-type div[data-testid="stVerticalBlock"]:has(> div[data-testid="stChatMessage"])::-webkit-scrollbar-thumb,
+    .stTabs [data-baseweb="tab-panel"]:first-of-type div[data-testid="stVerticalBlock"]:has(> div.empty-technical-container)::-webkit-scrollbar-thumb {
+        background-color: var(--border-default);
+        border-radius: 4px;
+    }
+
+    .stTabs [data-baseweb="tab-panel"]:first-of-type [data-testid="stVerticalBlockBorderWrapper"]::-webkit-scrollbar-thumb:hover,
+    .stTabs [data-baseweb="tab-panel"]:first-of-type div[data-testid="stVerticalBlock"]:has(> div[data-testid="stChatMessage"])::-webkit-scrollbar-thumb:hover,
+    .stTabs [data-baseweb="tab-panel"]:first-of-type div[data-testid="stVerticalBlock"]:has(> div.empty-technical-container)::-webkit-scrollbar-thumb:hover {
+        background-color: var(--border-hover);
+    }
+
+    /* -------------------------------------------------------------------------
        Chat Input Bar (Eliminate Stark White Composer)
        ------------------------------------------------------------------------- */
     div[data-testid="stChatInput"],
@@ -727,8 +782,41 @@ def inject_custom_css() -> None:
         background-color: #131824 !important;
         background: #131824 !important;
         border: 1px solid #253144 !important;
-        border-radius: 10px !important;
+        border-radius: 12px !important;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45) !important;
+    }
+
+    .stTabs [data-baseweb="tab-panel"]:first-of-type div[data-testid="stChatInput"] {
+        max-width: 980px !important;
+        margin: 0.4rem auto 0 auto !important;
+    }
+
+    @media (max-width: 992px) {
+        .stTabs [data-baseweb="tab-panel"]:first-of-type [data-testid="stVerticalBlockBorderWrapper"],
+        .stTabs [data-baseweb="tab-panel"]:first-of-type div[data-testid="stVerticalBlock"]:has(> div[data-testid="stChatMessage"]),
+        .stTabs [data-baseweb="tab-panel"]:first-of-type div[data-testid="stVerticalBlock"]:has(> div.empty-technical-container) {
+            height: calc(100vh - 255px) !important;
+            max-height: calc(100vh - 255px) !important;
+        }
+    }
+
+    @media (max-width: 600px) {
+        .top-header-strip {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.35rem;
+        }
+        .stTabs [data-baseweb="tab-list"] {
+            top: 75px !important;
+            gap: 0.75rem !important;
+        }
+        .stTabs [data-baseweb="tab-panel"]:first-of-type [data-testid="stVerticalBlockBorderWrapper"],
+        .stTabs [data-baseweb="tab-panel"]:first-of-type div[data-testid="stVerticalBlock"]:has(> div[data-testid="stChatMessage"]),
+        .stTabs [data-baseweb="tab-panel"]:first-of-type div[data-testid="stVerticalBlock"]:has(> div.empty-technical-container) {
+            height: calc(100vh - 265px) !important;
+            max-height: calc(100vh - 265px) !important;
+            min-height: 300px !important;
+        }
     }
 
     div[data-testid="stChatInput"]:focus-within,
@@ -1163,12 +1251,14 @@ def render_response_meta_row(
 def render_citations_expander(
     citations: List[Dict[str, Any]],
     retrieved_chunks: Optional[List[Dict[str, Any]]] = None,
+    chunk_map: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Render compact, structured evidence citations section."""
     if not citations:
         return
 
-    chunk_map = {c.get("chunk_id"): c for c in (retrieved_chunks or []) if isinstance(c, dict)}
+    if chunk_map is None:
+        chunk_map = {c.get("chunk_id"): c for c in (retrieved_chunks or []) if isinstance(c, dict)}
     label = f"Authoritative Sources ({len(citations)})"
 
     with st.expander(label, expanded=False):

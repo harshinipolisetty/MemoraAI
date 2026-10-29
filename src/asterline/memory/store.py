@@ -7,6 +7,7 @@ foreign key enforcement, and parameterized SQL queries.
 from contextlib import contextmanager
 from pathlib import Path
 import sqlite3
+import threading
 from typing import Any, Dict, Generator, List, Optional
 
 
@@ -16,14 +17,33 @@ class SQLiteStore:
     def __init__(self, db_path: Path):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._local = threading.local()
         self.init_schema()
 
     def get_connection(self) -> sqlite3.Connection:
-        """Create a new SQLite connection with foreign keys and Row factory enabled."""
-        conn = sqlite3.connect(str(self.db_path), timeout=15.0)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON;")
+        """Create or reuse a thread-local SQLite connection with WAL mode and Row factory enabled."""
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
+            conn = sqlite3.connect(str(self.db_path), timeout=15.0)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA foreign_keys = ON;")
+            conn.execute("PRAGMA journal_mode = WAL;")
+            conn.execute("PRAGMA synchronous = NORMAL;")
+            conn.execute("PRAGMA temp_store = MEMORY;")
+            conn.execute("PRAGMA mmap_size = 268435456;")
+            conn.execute("PRAGMA cache_size = -64000;")
+            self._local.conn = conn
         return conn
+
+    def close(self) -> None:
+        """Close the thread-local database connection if open."""
+        conn = getattr(self._local, "conn", None)
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+            self._local.conn = None
 
     @contextmanager
     def transaction(self) -> Generator[sqlite3.Connection, None, None]:
@@ -36,8 +56,6 @@ class SQLiteStore:
         except Exception:
             conn.rollback()
             raise
-        finally:
-            conn.close()
 
     def init_schema(self) -> None:
         """Initialize database tables and indexes safely (idempotent, never destroys data)."""
@@ -54,6 +72,8 @@ class SQLiteStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_conversations_user 
                     ON conversations(user_id);
+                CREATE INDEX IF NOT EXISTS idx_conversations_user_updated 
+                    ON conversations(user_id, updated_at DESC);
 
                 -- Messages Table
                 CREATE TABLE IF NOT EXISTS messages (
@@ -71,6 +91,8 @@ class SQLiteStore:
                     ON messages(conversation_id, created_at);
                 CREATE INDEX IF NOT EXISTS idx_messages_user 
                     ON messages(user_id);
+                CREATE INDEX IF NOT EXISTS idx_messages_conv_user_created 
+                    ON messages(conversation_id, user_id, created_at ASC);
 
                 -- User Memories Table
                 CREATE TABLE IF NOT EXISTS user_memories (
@@ -86,6 +108,8 @@ class SQLiteStore:
                 );
                 CREATE INDEX IF NOT EXISTS idx_user_memories_user 
                     ON user_memories(user_id, is_active);
+                CREATE INDEX IF NOT EXISTS idx_user_memories_user_active_updated 
+                    ON user_memories(user_id, is_active, updated_at DESC);
 
                 -- Memory Audit Log
                 CREATE TABLE IF NOT EXISTS memory_audit_log (

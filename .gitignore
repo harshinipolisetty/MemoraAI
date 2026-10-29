@@ -38,6 +38,8 @@ data/chroma/
 data/memory.db
 data/*.sqlite
 data/*.db
+data/*.db-wal
+data/*.db-shm
 data/cache/
 
 # IDE & OS

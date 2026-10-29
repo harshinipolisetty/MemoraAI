@@ -87,15 +87,20 @@ def get_runtime() -> Dict[str, Any]:
     )
     workflow_app = builder.build()
 
+    # Precompute serializations once for citation expanders
+    chunks_dict = [c.model_dump() for c in chunks]
+    chunk_map = {c["chunk_id"]: c for c in chunks_dict}
+
     return {
         "settings": settings,
         "chunks": chunks,
+        "chunks_dict": chunks_dict,
+        "chunk_map": chunk_map,
         "corpus_report": report,
         "retriever": retriever,
         "store": store,
         "memory_service": memory_service,
         "workflow": workflow_app,
-        "chunk_map": {c.chunk_id: c for c in chunks},
     }
 
 
@@ -133,6 +138,18 @@ def group_conversations(conversations: List[Dict[str, Any]]) -> Dict[str, List[D
 # State Management
 # =============================================================================
 
+def create_new_conversation(user_id: str, memory_service: MemoryService, title: str = "New Investigation") -> str:
+    """Create a distinct, persistent conversation and synchronize session state."""
+    new_conv_id = f"conv_{uuid.uuid4().hex[:12]}"
+    memory_service.get_or_create_conversation(user_id, new_conv_id, title)
+    st.session_state["active_conv_id"] = new_conv_id
+    st.session_state[f"conv_select_box_{user_id}"] = new_conv_id
+    st.session_state["last_trace_info"] = None
+    st.session_state.pop("pending_prompt", None)
+    st.session_state["conv_search_query"] = ""
+    return new_conv_id
+
+
 def init_session_state(memory_service: MemoryService) -> None:
     """Initialize persistent session state variables."""
     if "user_id" not in st.session_state:
@@ -150,6 +167,11 @@ def init_session_state(memory_service: MemoryService) -> None:
             memory_service.get_or_create_conversation(user_id, new_id, "New Investigation")
             st.session_state["active_conv_id"] = new_id
 
+    # Sync selectbox widget key to active_conv_id if not present
+    widget_key = f"conv_select_box_{user_id}"
+    if widget_key not in st.session_state:
+        st.session_state[widget_key] = st.session_state["active_conv_id"]
+
     if "last_trace_info" not in st.session_state:
         st.session_state["last_trace_info"] = None
 
@@ -164,19 +186,26 @@ def switch_user_profile(new_user_id: str, memory_service: MemoryService) -> None
     """Safely switch the active demonstration user identity and re-scope all conversation state."""
     if st.session_state.get("user_id") != new_user_id:
         st.session_state["user_id"] = new_user_id
+        if "user_profile_selector_widget" in st.session_state:
+            st.session_state["user_profile_selector_widget"] = new_user_id
         # Re-scope conversation to selected user's latest conversation or create new
         user_convs = memory_service.list_user_conversations(new_user_id)
         if user_convs:
-            st.session_state["active_conv_id"] = user_convs[0]["conversation_id"]
+            selected_conv = user_convs[0]["conversation_id"]
         else:
             new_id = f"conv_{uuid.uuid4().hex[:12]}"
             memory_service.get_or_create_conversation(new_user_id, new_id, "New Investigation")
-            st.session_state["active_conv_id"] = new_id
+            selected_conv = new_id
+
+        st.session_state["active_conv_id"] = selected_conv
+        st.session_state[f"conv_select_box_{new_user_id}"] = selected_conv
 
         # Clear transient UI state
         st.session_state["last_trace_info"] = None
         st.session_state["editing_memory_id"] = None
         st.session_state["confirm_delete_id"] = None
+        st.session_state["conv_search_query"] = ""
+        st.session_state.pop("pending_prompt", None)
         st.rerun()
 
 
@@ -215,10 +244,7 @@ def main() -> None:
 
         # Prominent New Investigation action
         if st.button("＋ New Investigation", use_container_width=True, type="primary"):
-            new_conv_id = f"conv_{uuid.uuid4().hex[:12]}"
-            memory_service.get_or_create_conversation(active_user_id, new_conv_id, "New Investigation")
-            st.session_state["active_conv_id"] = new_conv_id
-            st.session_state["last_trace_info"] = None
+            create_new_conversation(active_user_id, memory_service)
             st.rerun()
 
         # Searchable Conversation History
@@ -237,6 +263,8 @@ def main() -> None:
             query_lower = conv_search.strip().lower()
             filtered_convs = [c for c in user_convs if query_lower in c.get("title", "").lower()]
 
+        widget_key = f"conv_select_box_{active_user_id}"
+
         if filtered_convs:
             grouped = group_conversations(filtered_convs)
             conv_options = []
@@ -249,18 +277,28 @@ def main() -> None:
                     ts_clean = format_timestamp(str(c.get("updated_at") or c.get("created_at")))
                     conv_labels[cid] = f"[{group_name}] {c['title']} ({ts_clean})"
 
-            current_index = conv_options.index(active_conv_id) if active_conv_id in conv_options else 0
+            # Keep widget session state in sync with canonical active_conv_id
+            current_active = st.session_state.get("active_conv_id")
+            if current_active in conv_options:
+                st.session_state[widget_key] = current_active
+            elif widget_key in st.session_state and st.session_state[widget_key] not in conv_options:
+                del st.session_state[widget_key]
+
+            def on_conv_change() -> None:
+                new_cid = st.session_state.get(widget_key)
+                if new_cid and new_cid != st.session_state.get("active_conv_id"):
+                    st.session_state["active_conv_id"] = new_cid
+                    st.session_state["last_trace_info"] = None
+
             chosen_conv = st.selectbox(
                 label="Select Investigation",
                 options=conv_options,
                 format_func=lambda cid: conv_labels.get(cid, cid),
-                index=current_index,
+                index=None if widget_key in st.session_state else 0,
+                key=widget_key,
+                on_change=on_conv_change,
                 label_visibility="collapsed",
             )
-            if chosen_conv != active_conv_id:
-                st.session_state["active_conv_id"] = chosen_conv
-                st.session_state["last_trace_info"] = None
-                st.rerun()
         else:
             if conv_search:
                 st.caption("No matching investigations found.")
@@ -271,11 +309,22 @@ def main() -> None:
 
         # User Identity & Workspace Role (Bottom Positioned)
         st.markdown('<div class="sidebar-section-title">Active Demonstration Identity</div>', unsafe_allow_html=True)
+
+        def on_user_profile_change() -> None:
+            new_uid = st.session_state.get("user_profile_selector_widget")
+            if new_uid and new_uid != st.session_state.get("user_id"):
+                switch_user_profile(new_uid, memory_service)
+
+        profile_keys = list(DEMO_PROFILES.keys())
+        current_profile_index = profile_keys.index(active_user_id) if active_user_id in profile_keys else 0
+
         selected_user = st.selectbox(
             label="Active User Profile",
-            options=list(DEMO_PROFILES.keys()),
+            options=profile_keys,
             format_func=lambda uid: DEMO_PROFILES[uid]["name"],
-            index=list(DEMO_PROFILES.keys()).index(active_user_id),
+            index=current_profile_index,
+            key="user_profile_selector_widget",
+            on_change=on_user_profile_change,
             label_visibility="collapsed",
             help="Strictly scopes all SQLite conversation threads, queries, and persistent memories.",
         )
@@ -300,13 +349,17 @@ def main() -> None:
             else:
                 st.info("LangSmith: Offline / Local Mode")
 
+    # Re-read active session state after sidebar interactions to guarantee synchronization
+    active_user_id = st.session_state["user_id"]
+    active_conv_id = st.session_state["active_conv_id"]
+
     # Look up active conversation title
     active_conv_title = "New Investigation"
-    if user_convs:
-        for c in user_convs:
-            if c["conversation_id"] == active_conv_id:
-                active_conv_title = c.get("title") or "New Investigation"
-                break
+    current_user_convs = memory_service.list_user_conversations(active_user_id)
+    for c in current_user_convs:
+        if c["conversation_id"] == active_conv_id:
+            active_conv_title = c.get("title") or "New Investigation"
+            break
 
     # =========================================================================
     # Main Workspace Canvas
@@ -325,8 +378,8 @@ def main() -> None:
     with tab_chat:
         messages = memory_service.get_conversation_messages(active_conv_id, active_user_id)
 
-        # Container for all messages (past messages + active turn message)
-        chat_stream = st.container()
+        # ChatGPT-style bounded scrollable conversation container with autoscroll
+        chat_stream = st.container(height=580, autoscroll=True)
 
         # Chat Composer placed cleanly at the bottom
         user_prompt = st.chat_input("Ask a technical documentation question, investigate an incident, or manage memory...")
@@ -379,13 +432,17 @@ def main() -> None:
                             if msg.citations:
                                 render_citations_expander(
                                     citations=[c.model_dump() for c in msg.citations],
-                                    retrieved_chunks=[c.model_dump() for c in runtime["chunks"]],
+                                    chunk_map=runtime["chunk_map"],
                                 )
 
             # Render active prompt and live agent invocation inside chat_stream (ABOVE composer)
             if active_prompt:
                 clean_prompt = active_prompt.strip()
                 if clean_prompt:
+                    # Always read authoritative conversation and user IDs at submission time
+                    current_user_id = st.session_state["user_id"]
+                    current_conv_id = st.session_state["active_conv_id"]
+
                     # 1. Render immediate user message
                     with st.chat_message("user"):
                         st.markdown(clean_prompt)
@@ -396,17 +453,24 @@ def main() -> None:
                             try:
                                 state_input = {
                                     "user_message": clean_prompt,
-                                    "user_id": active_user_id,
-                                    "conversation_id": active_conv_id,
+                                    "user_id": current_user_id,
+                                    "conversation_id": current_conv_id,
                                 }
-                                result = workflow.invoke(state_input)
+                                result = workflow.invoke(
+                                    state_input,
+                                    config={"configurable": {"thread_id": current_conv_id}},
+                                )
 
                                 st.session_state["last_trace_info"] = result
 
                                 # Update conversation title if this is the start of a thread
                                 if len(messages) == 0:
                                     title_summary = clean_prompt[:36] + ("..." if len(clean_prompt) > 36 else "")
-                                    memory_service.update_conversation_title(active_conv_id, active_user_id, title_summary)
+                                    memory_service.update_conversation_title(
+                                        current_conv_id,
+                                        current_user_id,
+                                        title_summary,
+                                    )
 
                                 st.rerun()
 
